@@ -1,8 +1,4 @@
-
 [global]
-# Development vs production mode
-developmentMode = true
-
 # Disable usage stats collection
 showWarningOnDirectExecution = false
 
@@ -23,7 +19,6 @@ allowRunOnSave = true
 [browser]
 # Browser settings
 gatherUsageStats = false
-showWarningOnDirectExecution = false
 
 [theme]
 # App theme configuration
@@ -34,23 +29,6 @@ secondaryBackgroundColor = "#262730"
 textColor = "#fafafa"
 font = "sans serif"
 
-[client]
-# Client settings
-caching = true
-displayEnabled = true
-showErrorDetails = true
-
-[runner]
-# Runner settings
-magicEnabled = true
-installTracer = false
-fixMatplotlib = true
-
 [mapbox]
 # Mapbox token (if using mapbox maps)
 # token = "your_mapbox_token_here"
-
-[deprecation]
-# Handle deprecation warnings
-showfileUploaderEncoding = false
-showImageFormat = false
