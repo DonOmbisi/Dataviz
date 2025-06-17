@@ -13,6 +13,9 @@ from datetime import datetime, timedelta
 import re
 from typing import Dict, List, Any, Optional
 import warnings
+import hashlib
+import secrets
+import uuid
 try:
     from pymongo import MongoClient
     from pymongo.errors import ConnectionFailure
@@ -259,8 +262,334 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# User authentication and management
+class UserManager:
+    def __init__(self, db_manager):
+        self.db_manager = db_manager
+        self.init_user_tables()
+    
+    def init_user_tables(self):
+        """Initialize user tables if they don't exist"""
+        if self.db_manager.db is None:
+            return
+        
+        try:
+            if self.db_manager.db_type == "mongodb":
+                # MongoDB collections are created automatically
+                pass
+            elif self.db_manager.db_type == "postgresql":
+                cursor = self.db_manager.db.cursor()
+                
+                # Create users table
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id SERIAL PRIMARY KEY,
+                        user_id VARCHAR(255) UNIQUE NOT NULL,
+                        email VARCHAR(255) UNIQUE NOT NULL,
+                        password_hash VARCHAR(255) NOT NULL,
+                        salt VARCHAR(255) NOT NULL,
+                        first_name VARCHAR(100),
+                        last_name VARCHAR(100),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_login TIMESTAMP,
+                        is_active BOOLEAN DEFAULT TRUE
+                    )
+                """)
+                
+                # Create user sessions table
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS user_sessions (
+                        id SERIAL PRIMARY KEY,
+                        session_id VARCHAR(255) UNIQUE NOT NULL,
+                        user_id VARCHAR(255) NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        expires_at TIMESTAMP NOT NULL,
+                        is_active BOOLEAN DEFAULT TRUE
+                    )
+                """)
+                
+                self.db_manager.db.commit()
+                cursor.close()
+                
+        except Exception as e:
+            st.error(f"Error initializing user tables: {str(e)}")
+            if self.db_manager.db_type == "postgresql":
+                self.db_manager.db.rollback()
+    
+    def hash_password(self, password: str, salt: str = None) -> tuple:
+        """Hash password with salt"""
+        if salt is None:
+            salt = secrets.token_hex(32)
+        
+        password_hash = hashlib.pbkdf2_hmac('sha256', 
+                                          password.encode('utf-8'), 
+                                          salt.encode('utf-8'), 
+                                          100000)
+        return password_hash.hex(), salt
+    
+    def verify_password(self, password: str, password_hash: str, salt: str) -> bool:
+        """Verify password against hash"""
+        hash_to_check, _ = self.hash_password(password, salt)
+        return hash_to_check == password_hash
+    
+    def validate_email(self, email: str) -> bool:
+        """Validate email format"""
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return re.match(pattern, email) is not None
+    
+    def register_user(self, email: str, password: str, first_name: str, last_name: str) -> Dict[str, Any]:
+        """Register a new user"""
+        if self.db_manager.db is None:
+            return {"success": False, "message": "Database not available"}
+        
+        # Validate inputs
+        if not self.validate_email(email):
+            return {"success": False, "message": "Invalid email format"}
+        
+        if len(password) < 6:
+            return {"success": False, "message": "Password must be at least 6 characters long"}
+        
+        if not first_name.strip() or not last_name.strip():
+            return {"success": False, "message": "First name and last name are required"}
+        
+        try:
+            # Check if user already exists
+            if self.get_user_by_email(email):
+                return {"success": False, "message": "User with this email already exists"}
+            
+            # Generate user ID and hash password
+            user_id = str(uuid.uuid4())
+            password_hash, salt = self.hash_password(password)
+            
+            if self.db_manager.db_type == "mongodb":
+                user_doc = {
+                    "user_id": user_id,
+                    "email": email.lower(),
+                    "password_hash": password_hash,
+                    "salt": salt,
+                    "first_name": first_name.strip(),
+                    "last_name": last_name.strip(),
+                    "created_at": datetime.utcnow(),
+                    "last_login": None,
+                    "is_active": True
+                }
+                self.db_manager.db.users.insert_one(user_doc)
+                
+            elif self.db_manager.db_type == "postgresql":
+                cursor = self.db_manager.db.cursor()
+                cursor.execute("""
+                    INSERT INTO users (user_id, email, password_hash, salt, first_name, last_name)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (user_id, email.lower(), password_hash, salt, first_name.strip(), last_name.strip()))
+                self.db_manager.db.commit()
+                cursor.close()
+            
+            return {"success": True, "message": "User registered successfully", "user_id": user_id}
+            
+        except Exception as e:
+            return {"success": False, "message": f"Registration failed: {str(e)}"}
+    
+    def authenticate_user(self, email: str, password: str) -> Dict[str, Any]:
+        """Authenticate user login"""
+        if self.db_manager.db is None:
+            return {"success": False, "message": "Database not available"}
+        
+        try:
+            user = self.get_user_by_email(email)
+            if not user:
+                return {"success": False, "message": "Invalid email or password"}
+            
+            if not self.verify_password(password, user['password_hash'], user['salt']):
+                return {"success": False, "message": "Invalid email or password"}
+            
+            if not user.get('is_active', True):
+                return {"success": False, "message": "Account is deactivated"}
+            
+            # Update last login
+            self.update_last_login(user['user_id'])
+            
+            # Create session
+            session_id = self.create_session(user['user_id'])
+            
+            return {
+                "success": True, 
+                "message": "Login successful",
+                "user": user,
+                "session_id": session_id
+            }
+            
+        except Exception as e:
+            return {"success": False, "message": f"Authentication failed: {str(e)}"}
+    
+    def get_user_by_email(self, email: str) -> Optional[Dict]:
+        """Get user by email"""
+        if self.db_manager.db is None:
+            return None
+        
+        try:
+            if self.db_manager.db_type == "mongodb":
+                user = self.db_manager.db.users.find_one({"email": email.lower()})
+                if user:
+                    user['id'] = str(user['_id'])
+                return user
+                
+            elif self.db_manager.db_type == "postgresql":
+                cursor = self.db_manager.db.cursor()
+                cursor.execute("""
+                    SELECT user_id, email, password_hash, salt, first_name, last_name, 
+                           created_at, last_login, is_active
+                    FROM users WHERE email = %s
+                """, (email.lower(),))
+                row = cursor.fetchone()
+                cursor.close()
+                
+                if row:
+                    return {
+                        'user_id': row[0],
+                        'email': row[1],
+                        'password_hash': row[2],
+                        'salt': row[3],
+                        'first_name': row[4],
+                        'last_name': row[5],
+                        'created_at': row[6],
+                        'last_login': row[7],
+                        'is_active': row[8]
+                    }
+                return None
+                
+        except Exception as e:
+            st.error(f"Error retrieving user: {str(e)}")
+            return None
+    
+    def update_last_login(self, user_id: str):
+        """Update user's last login timestamp"""
+        if self.db_manager.db is None:
+            return
+        
+        try:
+            if self.db_manager.db_type == "mongodb":
+                self.db_manager.db.users.update_one(
+                    {"user_id": user_id},
+                    {"$set": {"last_login": datetime.utcnow()}}
+                )
+                
+            elif self.db_manager.db_type == "postgresql":
+                cursor = self.db_manager.db.cursor()
+                cursor.execute("""
+                    UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = %s
+                """, (user_id,))
+                self.db_manager.db.commit()
+                cursor.close()
+                
+        except Exception as e:
+            st.error(f"Error updating last login: {str(e)}")
+    
+    def create_session(self, user_id: str) -> str:
+        """Create a new user session"""
+        if self.db_manager.db is None:
+            return secrets.token_urlsafe(32)  # Return a session ID even without DB
+        
+        try:
+            session_id = secrets.token_urlsafe(32)
+            expires_at = datetime.utcnow() + timedelta(days=7)  # Session expires in 7 days
+            
+            if self.db_manager.db_type == "mongodb":
+                session_doc = {
+                    "session_id": session_id,
+                    "user_id": user_id,
+                    "created_at": datetime.utcnow(),
+                    "expires_at": expires_at,
+                    "is_active": True
+                }
+                self.db_manager.db.user_sessions.insert_one(session_doc)
+                
+            elif self.db_manager.db_type == "postgresql":
+                cursor = self.db_manager.db.cursor()
+                cursor.execute("""
+                    INSERT INTO user_sessions (session_id, user_id, expires_at)
+                    VALUES (%s, %s, %s)
+                """, (session_id, user_id, expires_at))
+                self.db_manager.db.commit()
+                cursor.close()
+            
+            return session_id
+            
+        except Exception as e:
+            st.error(f"Error creating session: {str(e)}")
+            return secrets.token_urlsafe(32)
+    
+    def validate_session(self, session_id: str) -> Optional[Dict]:
+        """Validate user session and return user info"""
+        if self.db_manager.db is None or not session_id:
+            return None
+        
+        try:
+            if self.db_manager.db_type == "mongodb":
+                session = self.db_manager.db.user_sessions.find_one({
+                    "session_id": session_id,
+                    "is_active": True,
+                    "expires_at": {"$gt": datetime.utcnow()}
+                })
+                
+                if session:
+                    user = self.db_manager.db.users.find_one({"user_id": session['user_id']})
+                    if user:
+                        user['id'] = str(user['_id'])
+                    return user
+                    
+            elif self.db_manager.db_type == "postgresql":
+                cursor = self.db_manager.db.cursor()
+                cursor.execute("""
+                    SELECT u.user_id, u.email, u.first_name, u.last_name, u.created_at, u.last_login, u.is_active
+                    FROM users u
+                    JOIN user_sessions s ON u.user_id = s.user_id
+                    WHERE s.session_id = %s AND s.is_active = TRUE AND s.expires_at > CURRENT_TIMESTAMP
+                """, (session_id,))
+                row = cursor.fetchone()
+                cursor.close()
+                
+                if row:
+                    return {
+                        'user_id': row[0],
+                        'email': row[1],
+                        'first_name': row[2],
+                        'last_name': row[3],
+                        'created_at': row[4],
+                        'last_login': row[5],
+                        'is_active': row[6]
+                    }
+            
+            return None
+            
+        except Exception as e:
+            st.error(f"Error validating session: {str(e)}")
+            return None
+    
+    def logout_user(self, session_id: str):
+        """Deactivate user session"""
+        if self.db_manager.db is None or not session_id:
+            return
+        
+        try:
+            if self.db_manager.db_type == "mongodb":
+                self.db_manager.db.user_sessions.update_one(
+                    {"session_id": session_id},
+                    {"$set": {"is_active": False}}
+                )
+                
+            elif self.db_manager.db_type == "postgresql":
+                cursor = self.db_manager.db.cursor()
+                cursor.execute("""
+                    UPDATE user_sessions SET is_active = FALSE WHERE session_id = %s
+                """, (session_id,))
+                self.db_manager.db.commit()
+                cursor.close()
+                
+        except Exception as e:
+            st.error(f"Error logging out: {str(e)}")
+
 # MongoDB document schemas (for reference, not enforced)
-# Documents will be stored in collections: datasets, analyses, comments
+# Documents will be stored in collections: datasets, analyses, comments, users, user_sessions
 
 class DatabaseManager:
     def __init__(self):
@@ -438,21 +767,32 @@ class DatabaseManager:
             st.error(f"Error retrieving datasets: {str(e)}")
             return []
     
-    def save_analysis(self, dataset_id, analysis_type, chart_type, config, insights):
+    def save_analysis(self, dataset_id, analysis_type, chart_type, config, insights, user_id=None):
         if self.db is None:
             return None
         try:
-            analysis_doc = {
-                "dataset_id": dataset_id,
-                "analysis_type": analysis_type,
-                "chart_type": chart_type,
-                "configuration": config,  # Store as dict, not JSON string
-                "insights": insights,
-                "created_date": datetime.utcnow(),
-                "user_id": "default_user"
-            }
-            result = self.db.analyses.insert_one(analysis_doc)
-            return str(result.inserted_id)
+            if self.db_type == "mongodb":
+                analysis_doc = {
+                    "dataset_id": dataset_id,
+                    "analysis_type": analysis_type,
+                    "chart_type": chart_type,
+                    "configuration": config,  # Store as dict, not JSON string
+                    "insights": insights,
+                    "created_date": datetime.utcnow(),
+                    "user_id": user_id or "anonymous"
+                }
+                result = self.db.analyses.insert_one(analysis_doc)
+                return str(result.inserted_id)
+            elif self.db_type == "postgresql":
+                cursor = self.db.cursor()
+                cursor.execute("""
+                    INSERT INTO analyses (dataset_id, analysis_type, chart_type, configuration, insights, user_id)
+                    VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
+                """, (dataset_id, analysis_type, chart_type, json.dumps(config), insights, user_id or "anonymous"))
+                analysis_id = cursor.fetchone()[0]
+                self.db.commit()
+                cursor.close()
+                return str(analysis_id)
         except Exception as e:
             st.error(f"Error saving analysis: {str(e)}")
             return None
@@ -468,6 +808,115 @@ class DatabaseManager:
                 "timestamp": datetime.utcnow()
             }
             result = self.db.comments.insert_one(comment_doc)
+
+
+def show_auth_ui():
+    """Display authentication UI (login/register forms)"""
+    st.markdown("""
+    <div class="main-header">
+        <h1>📊 DataViz Pro</h1>
+        <p>Advanced Analytics Dashboard with AI-Powered Insights</p>
+        <p style="font-size: 0.9rem; opacity: 0.8;">Please login or register to continue</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Authentication tabs
+    auth_tab1, auth_tab2 = st.tabs(["🔑 Login", "📝 Register"])
+    
+    with auth_tab1:
+        st.markdown("### 🔑 Login to Your Account")
+        
+        with st.form("login_form"):
+            email = st.text_input("📧 Email Address", placeholder="your.email@example.com")
+            password = st.text_input("🔒 Password", type="password", placeholder="Enter your password")
+            
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                login_submitted = st.form_submit_button("🚀 Login", use_container_width=True, type="primary")
+            
+            if login_submitted:
+                if email and password:
+                    with st.spinner("Authenticating..."):
+                        result = analyzer.user_manager.authenticate_user(email, password)
+                        
+                        if result['success']:
+                            st.session_state.authenticated = True
+                            st.session_state.user = result['user']
+                            st.session_state.session_id = result['session_id']
+                            st.success("Login successful! Redirecting...")
+                            st.rerun()
+                        else:
+                            st.error(result['message'])
+                else:
+                    st.error("Please enter both email and password")
+    
+    with auth_tab2:
+        st.markdown("### 📝 Create New Account")
+        
+        with st.form("register_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                first_name = st.text_input("👤 First Name", placeholder="John")
+            with col2:
+                last_name = st.text_input("👤 Last Name", placeholder="Doe")
+            
+            reg_email = st.text_input("📧 Email Address", placeholder="your.email@example.com")
+            
+            col3, col4 = st.columns(2)
+            with col3:
+                reg_password = st.text_input("🔒 Password", type="password", placeholder="At least 6 characters")
+            with col4:
+                confirm_password = st.text_input("🔒 Confirm Password", type="password", placeholder="Repeat password")
+            
+            # Terms and conditions
+            terms_accepted = st.checkbox("I agree to the Terms of Service and Privacy Policy")
+            
+            register_submitted = st.form_submit_button("✨ Create Account", use_container_width=True, type="primary")
+            
+            if register_submitted:
+                if not all([first_name, last_name, reg_email, reg_password, confirm_password]):
+                    st.error("Please fill in all fields")
+                elif reg_password != confirm_password:
+                    st.error("Passwords do not match")
+                elif not terms_accepted:
+                    st.error("Please accept the Terms of Service and Privacy Policy")
+                else:
+                    with st.spinner("Creating account..."):
+                        result = analyzer.user_manager.register_user(reg_email, reg_password, first_name, last_name)
+                        
+                        if result['success']:
+                            st.success("Account created successfully! Please login with your credentials.")
+                            st.balloons()
+                        else:
+                            st.error(result['message'])
+    
+    # Features showcase for non-authenticated users
+    st.markdown("---")
+    st.markdown("""
+    <div style="text-align: center; padding: 2rem;">
+        <h3>✨ What you'll get with DataViz Pro</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-top: 1rem;">
+            <div class="insight-card">
+                <h4>🤖 AI-Powered Analytics</h4>
+                <p>Natural language queries and automatic insight generation</p>
+            </div>
+            <div class="insight-card">
+                <h4>📊 15+ Chart Types</h4>
+                <p>From basic charts to advanced treemaps and geographic maps</p>
+            </div>
+            <div class="insight-card">
+                <h4>🏗️ Dashboard Builder</h4>
+                <p>Create custom dashboards with drag-and-drop widgets</p>
+            </div>
+            <div class="insight-card">
+                <h4>🤝 Collaboration</h4>
+                <p>Share your analysis and collaborate with your team</p>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
             return str(result.inserted_id)
         except Exception as e:
             st.error(f"Error saving comment: {str(e)}")
@@ -492,6 +941,7 @@ class DataAnalyzer:
         self.df = None
         self.openai_client = None
         self.db_manager = DatabaseManager()
+        self.user_manager = UserManager(self.db_manager)
         if OPENAI_AVAILABLE:
             api_key = os.getenv("OPENAI_API_KEY")
             if api_key:
@@ -777,14 +1227,37 @@ analyzer = get_analyzer()
 
 # Main application
 def main():
-    # Header with status indicators
-    st.markdown("""
+    # Initialize session state for authentication
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+        st.session_state.user = None
+        st.session_state.session_id = None
+    
+    # Check for existing session
+    if not st.session_state.authenticated and 'session_id' in st.session_state and st.session_state.session_id:
+        user = analyzer.user_manager.validate_session(st.session_state.session_id)
+        if user:
+            st.session_state.authenticated = True
+            st.session_state.user = user
+    
+    # Authentication UI
+    if not st.session_state.authenticated:
+        show_auth_ui()
+        return
+    
+    # Header with status indicators and user info
+    st.markdown(f"""
     <div class="main-header">
         <h1>📊 DataViz Pro</h1>
         <p>Advanced Analytics Dashboard with AI-Powered Insights</p>
         <div style="position: absolute; top: 1rem; right: 1rem;">
-            <span class="status-indicator status-online" data-tooltip="System Online"></span>
-            <span style="font-size: 0.8rem; color: rgba(255,255,255,0.8);">Live</span>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <span style="font-size: 0.9rem; color: rgba(255,255,255,0.9);">
+                    Welcome, {st.session_state.user['first_name']} {st.session_state.user['last_name']}
+                </span>
+                <span class="status-indicator status-online" data-tooltip="System Online"></span>
+                <span style="font-size: 0.8rem; color: rgba(255,255,255,0.8);">Live</span>
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -800,6 +1273,21 @@ def main():
     # Sidebar
     with st.sidebar:
         st.markdown("### 🎛️ Control Panel")
+        
+        # User info and logout
+        st.markdown(f"""
+        <div style="background: rgba(255, 255, 255, 0.1); padding: 1rem; border-radius: 10px; margin-bottom: 1rem;">
+            <h4>👤 {st.session_state.user['first_name']} {st.session_state.user['last_name']}</h4>
+            <p style="font-size: 0.8rem; opacity: 0.8;">{st.session_state.user['email']}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("🚪 Logout", use_container_width=True):
+            analyzer.user_manager.logout_user(st.session_state.session_id)
+            st.session_state.authenticated = False
+            st.session_state.user = None
+            st.session_state.session_id = None
+            st.rerun()
         
         # Database status
         if analyzer.db_manager.db is not None:
@@ -854,7 +1342,7 @@ def main():
                     # Save to database
                     dataset_id = analyzer.db_manager.save_dataset(
                         name=f"Sample {sample_type}",
-                        description=f"Generated sample dataset for {sample_type.lower()}",
+                        description=f"Generated sample dataset for {sample_type.lower()} by {st.session_state.user['first_name']} {st.session_state.user['last_name']}",
                         file_type="generated",
                         df=df
                     )
@@ -920,12 +1408,23 @@ def main():
                 with col1:
                     if st.button("📝 Add Comment"):
                         if comment_text.strip():
+                            user_name = f"{st.session_state.user['first_name']} {st.session_state.user['last_name']}"
                             new_comment = {
                                 'text': comment_text,
                                 'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                'user': 'Analyst'  # In a real app, this would be the logged-in user
+                                'user': user_name,
+                                'user_id': st.session_state.user['user_id']
                             }
                             st.session_state.comments.append(new_comment)
+                            
+                            # Save comment to database if available
+                            if analyzer.db_manager.db is not None:
+                                analyzer.db_manager.save_comment(
+                                    analysis_id="current_session",  # In a real app, this would be the actual analysis ID
+                                    user_id=st.session_state.user['user_id'],
+                                    comment_text=comment_text
+                                )
+                            
                             st.success("Comment added!")
                             st.rerun()
                 
