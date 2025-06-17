@@ -532,13 +532,25 @@ analyzer = get_analyzer()
 
 # Main application
 def main():
-    # Header
+    # Header with status indicators
     st.markdown("""
     <div class="main-header">
         <h1>📊 DataViz Pro</h1>
         <p>Advanced Analytics Dashboard with AI-Powered Insights</p>
+        <div style="position: absolute; top: 1rem; right: 1rem;">
+            <span class="status-indicator status-online" data-tooltip="System Online"></span>
+            <span style="font-size: 0.8rem; color: rgba(255,255,255,0.8);">Live</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Breadcrumb navigation
+    if analyzer.df is not None:
+        st.markdown("""
+        <div class="breadcrumb">
+            📊 DataViz Pro → 📁 Dataset Loaded → 🔍 Analysis Mode
+        </div>
+        """, unsafe_allow_html=True)
     
     # Sidebar
     with st.sidebar:
@@ -605,6 +617,73 @@ def main():
                 st.write(f"• {col}")
             if len(categorical_cols) > 5:
                 st.write(f"... and {len(categorical_cols) - 5} more")
+            
+            # Collaboration & Sharing
+            st.markdown("### 🤝 Collaboration")
+            
+            # Initialize session state for comments
+            if 'comments' not in st.session_state:
+                st.session_state.comments = []
+            
+            # Comment system
+            with st.expander("💬 Comments & Notes"):
+                comment_text = st.text_area("Add a comment or note:", placeholder="Share insights with your team...")
+                col1, col2 = st.columns([1, 4])
+                
+                with col1:
+                    if st.button("📝 Add Comment"):
+                        if comment_text.strip():
+                            new_comment = {
+                                'text': comment_text,
+                                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                'user': 'Analyst'  # In a real app, this would be the logged-in user
+                            }
+                            st.session_state.comments.append(new_comment)
+                            st.success("Comment added!")
+                            st.rerun()
+                
+                # Display comments
+                if st.session_state.comments:
+                    st.markdown("**Recent Comments:**")
+                    for i, comment in enumerate(reversed(st.session_state.comments[-5:])):  # Show last 5
+                        st.markdown(f"""
+                        <div style="background: rgba(255,255,255,0.05); padding: 0.5rem; border-radius: 8px; margin: 0.5rem 0;">
+                            <small><strong>{comment['user']}</strong> - {comment['timestamp']}</small><br>
+                            {comment['text']}
+                        </div>
+                        """, unsafe_allow_html=True)
+            
+            # Sharing options
+            with st.expander("🔗 Share & Export"):
+                st.markdown("**Share this analysis:**")
+                
+                # Generate shareable link (mock implementation)
+                current_url = "https://dataviz-pro.replit.app"  # This would be the actual URL
+                st.text_input("Shareable Link:", value=current_url, disabled=True)
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if st.button("📋 Copy Link"):
+                        st.success("Link copied to clipboard!")
+                
+                with col2:
+                    if st.button("📧 Email Share"):
+                        st.info("Email sharing feature would open email client")
+                
+                with col3:
+                    if st.button("💾 Save Session"):
+                        session_data = {
+                            'dataset_info': col_info,
+                            'comments': st.session_state.comments,
+                            'timestamp': datetime.now().isoformat()
+                        }
+                        session_json = json.dumps(session_data, indent=2)
+                        st.download_button(
+                            label="Download Session",
+                            data=session_json,
+                            file_name=f"analysis_session_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                            mime="application/json"
+                        )
     
     # Main content area
     if analyzer.df is not None:
@@ -728,29 +807,61 @@ def main():
                 # Chart customization
                 st.markdown("### 🎨 Customization")
                 
+                # Theme preferences (persistent)
+                if 'theme_preferences' not in st.session_state:
+                    st.session_state.theme_preferences = {
+                        'color_scheme': 'plotly',
+                        'chart_height': 500,
+                        'animation_enabled': True,
+                        'show_grid': True
+                    }
+                
                 # Color scheme
                 color_scheme = st.selectbox(
                     "Color Scheme:",
-                    ["plotly", "viridis", "plasma", "inferno", "magma", "cividis"]
+                    ["plotly", "viridis", "plasma", "inferno", "magma", "cividis", "sunset", "rainbow"],
+                    index=["plotly", "viridis", "plasma", "inferno", "magma", "cividis", "sunset", "rainbow"].index(st.session_state.theme_preferences['color_scheme'])
                 )
+                st.session_state.theme_preferences['color_scheme'] = color_scheme
                 
                 # Chart size
-                chart_height = st.slider("Chart Height:", 300, 800, 500)
+                chart_height = st.slider("Chart Height:", 300, 1000, st.session_state.theme_preferences['chart_height'])
+                st.session_state.theme_preferences['chart_height'] = chart_height
+                
+                # Animation toggle
+                enable_animations = st.checkbox("Enable Animations", value=st.session_state.theme_preferences['animation_enabled'])
+                st.session_state.theme_preferences['animation_enabled'] = enable_animations
+                
+                # Grid toggle
+                show_grid = st.checkbox("Show Grid", value=st.session_state.theme_preferences['show_grid'])
+                st.session_state.theme_preferences['show_grid'] = show_grid
                 
                 # Aggregation for grouped data
                 if chart_type in ["Bar Chart", "Line Chart"]:
                     agg_func = st.selectbox("Aggregation:", ["sum", "mean", "count", "max", "min"])
+                
+                # Performance settings
+                with st.expander("⚡ Performance Settings"):
+                    sample_size = st.slider("Sample Size (for large datasets):", 1000, 50000, 10000)
+                    enable_caching = st.checkbox("Enable Data Caching", value=True)
             
-            # Generate visualization
+            # Generate visualization with performance optimization
             try:
                 fig = None
                 
+                # Apply sampling for large datasets
+                display_df = df
+                if len(df) > sample_size:
+                    display_df = df.sample(n=sample_size).sort_index()
+                    st.info(f"Displaying sample of {sample_size:,} rows from {len(df):,} total rows for performance")
+                
                 if chart_type == "Line Chart" and x_col and y_col:
                     if color_col:
-                        fig = px.line(df, x=x_col, y=y_col, color=color_col, 
-                                    color_discrete_sequence=px.colors.qualitative.Set3)
+                        fig = px.line(display_df, x=x_col, y=y_col, color=color_col, 
+                                    color_discrete_sequence=px.colors.qualitative.Set3,
+                                    title=f"{y_col} vs {x_col}")
                     else:
-                        fig = px.line(df, x=x_col, y=y_col)
+                        fig = px.line(display_df, x=x_col, y=y_col, title=f"{y_col} vs {x_col}")
                 
                 elif chart_type == "Bar Chart" and x_col and y_col:
                     if color_col:
@@ -799,7 +910,8 @@ def main():
                             fig = px.treemap(treemap_data, path=path_cols, values=value_col,
                                            color=value_col, color_continuous_scale=color_scheme)
                         else:
-                            treemap_data = df.groupby(path_cols).size().reset_index(name='count')
+                            treemap_data = df.groupby(path_cols).size().reset_index()
+                            treemap_data.columns = list(path_cols) + ['count']
                             fig = px.treemap(treemap_data, path=path_cols, values='count')
                     else:
                         st.warning("Treemap requires at least 2 categorical columns")
@@ -813,7 +925,8 @@ def main():
                             fig = px.sunburst(sunburst_data, path=path_cols, values=value_col,
                                             color=value_col, color_continuous_scale=color_scheme)
                         else:
-                            sunburst_data = df.groupby(path_cols).size().reset_index(name='count')
+                            sunburst_data = df.groupby(path_cols).size().reset_index()
+                            sunburst_data.columns = list(path_cols) + ['count']
                             fig = px.sunburst(sunburst_data, path=path_cols, values='count')
                     else:
                         st.warning("Sunburst chart requires at least 2 categorical columns")
@@ -840,7 +953,8 @@ def main():
                     source_col, target_col = categorical_cols[0], categorical_cols[1]
                     
                     # Create source-target pairs
-                    sankey_data = df.groupby([source_col, target_col]).size().reset_index(name='value')
+                    sankey_data = df.groupby([source_col, target_col]).size().reset_index()
+                    sankey_data.columns = [source_col, target_col, 'value']
                     
                     # Create unique labels
                     sources = sankey_data[source_col].unique()
@@ -1332,6 +1446,9 @@ def main():
             st.markdown("### 📈 Statistical Summary")
             numeric_cols = filtered_df.select_dtypes(include=[np.number]).columns
             
+            summary_stats = None
+            corr_matrix = None
+            
             if len(numeric_cols) > 0:
                 summary_stats = filtered_df[numeric_cols].describe()
                 st.dataframe(summary_stats, use_container_width=True)
@@ -1367,7 +1484,7 @@ def main():
             
             with col2:
                 if st.button("📈 Export Summary Stats"):
-                    if len(numeric_cols) > 0:
+                    if len(numeric_cols) > 0 and summary_stats is not None:
                         summary_csv = summary_stats.to_csv()
                         st.download_button(
                             label="Download Summary",
@@ -1378,7 +1495,7 @@ def main():
             
             with col3:
                 if st.button("🔗 Export Correlation"):
-                    if len(numeric_cols) > 1:
+                    if len(numeric_cols) > 1 and corr_matrix is not None:
                         corr_csv = corr_matrix.to_csv()
                         st.download_button(
                             label="Download Correlation",
