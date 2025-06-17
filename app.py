@@ -981,13 +981,24 @@ def main():
                     fig.update_layout(title_text="Sankey Diagram", font_size=10, template="plotly_dark")
                 
                 if fig:
+                    # Enhanced styling with user preferences
                     fig.update_layout(
                         height=chart_height,
                         template="plotly_dark",
                         showlegend=True,
-                        margin=dict(l=0, r=0, t=50, b=0)
+                        margin=dict(l=0, r=0, t=50, b=0),
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        xaxis=dict(showgrid=show_grid, gridcolor='rgba(255,255,255,0.1)'),
+                        yaxis=dict(showgrid=show_grid, gridcolor='rgba(255,255,255,0.1)'),
+                        font=dict(family="Inter, sans-serif"),
+                        transition=dict(duration=500 if enable_animations else 0)
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Add glassmorphism container
+                    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+                    st.plotly_chart(fig, use_container_width=True, key=f"chart_{chart_type}")
+                    st.markdown('</div>', unsafe_allow_html=True)
                     
                     # Export options
                     st.markdown("### 💾 Export Options")
@@ -1538,29 +1549,94 @@ def main():
                 analyzer.generate_sample_data("Website Analytics")
                 st.rerun()
         
-        # Features showcase
+        # Features showcase with interactive demonstration
         st.markdown("""
         <div style="margin-top: 3rem;">
-            <h3>✨ Features</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-top: 1rem;">
+            <h3>✨ Comprehensive Features</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 1rem;">
                 <div class="insight-card">
                     <h4>🤖 AI-Powered Insights</h4>
-                    <p>Automatic anomaly detection, trend analysis, and correlation discovery</p>
+                    <p>Automatic anomaly detection, trend analysis, correlation discovery, and intelligent pattern recognition</p>
                 </div>
                 <div class="insight-card">
                     <h4>💬 Natural Language Queries</h4>
-                    <p>Ask questions in plain English and get instant visualizations</p>
+                    <p>Ask questions in plain English and get instant visualizations with OpenAI integration</p>
                 </div>
                 <div class="insight-card">
-                    <h4>📊 Interactive Charts</h4>
-                    <p>Multiple chart types with real-time filtering and customization</p>
+                    <h4>📊 Advanced Visualizations</h4>
+                    <p>15+ chart types including treemaps, sankey diagrams, geographic maps, and waterfall charts</p>
                 </div>
                 <div class="insight-card">
-                    <h4>🎨 Modern Design</h4>
-                    <p>Glassmorphism UI with adaptive color schemes and smooth animations</p>
+                    <h4>🏗️ Dashboard Builder</h4>
+                    <p>Drag-and-drop interface for creating custom dashboards with real-time widgets</p>
+                </div>
+                <div class="insight-card">
+                    <h4>🗺️ Geographic Mapping</h4>
+                    <p>Interactive maps with coordinate plotting and location-based analytics</p>
+                </div>
+                <div class="insight-card">
+                    <h4>🤝 Collaboration Tools</h4>
+                    <p>Real-time commenting, sharing capabilities, and session management</p>
+                </div>
+                <div class="insight-card">
+                    <h4>🎨 Premium Design</h4>
+                    <p>Glassmorphism UI with adaptive themes, smooth animations, and personalization</p>
+                </div>
+                <div class="insight-card">
+                    <h4>⚡ Performance Optimized</h4>
+                    <p>Smart sampling, caching, and efficient rendering for large datasets</p>
                 </div>
             </div>
         </div>
+        
+        <!-- Floating Action Button -->
+        <div class="floating-action" onclick="window.scrollTo({top: 0, behavior: 'smooth'})" title="Back to Top">
+            ↑
+        </div>
+        
+        <!-- Background particles effect -->
+        <div class="particle-bg">
+            <canvas id="particles" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1;"></canvas>
+        </div>
+        
+        <script>
+        // Simple particle effect
+        if (document.getElementById('particles')) {
+            const canvas = document.getElementById('particles');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            const particles = [];
+            for (let i = 0; i < 50; i++) {
+                particles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    size: Math.random() * 2 + 1,
+                    opacity: Math.random() * 0.5 + 0.1
+                });
+            }
+            
+            function animate() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+                    if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+                    
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(0, 212, 255, ${p.opacity})`;
+                    ctx.fill();
+                });
+                requestAnimationFrame(animate);
+            }
+            animate();
+        }
+        </script>
         """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
