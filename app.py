@@ -33,47 +33,212 @@ st.set_page_config(
 # Custom CSS for glassmorphism and modern design
 st.markdown("""
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
     .main-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         padding: 2rem;
-        border-radius: 15px;
+        border-radius: 20px;
         margin-bottom: 2rem;
         color: white;
         text-align: center;
-        backdrop-filter: blur(10px);
+        backdrop-filter: blur(20px);
         box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .main-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
+        animation: shimmer 3s infinite;
+    }
+    
+    @keyframes shimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+    }
+    
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
     }
     
     .metric-card {
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(10px);
-        border-radius: 15px;
-        padding: 1.5rem;
+        background: rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(20px);
+        border-radius: 20px;
+        padding: 2rem;
         margin: 1rem 0;
         border: 1px solid rgba(255, 255, 255, 0.2);
         box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        transition: all 0.3s ease;
+        position: relative;
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 45px 0 rgba(31, 38, 135, 0.5);
+        border: 1px solid rgba(0, 212, 255, 0.4);
     }
     
     .insight-card {
         background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(118, 75, 162, 0.1));
-        backdrop-filter: blur(10px);
-        border-radius: 15px;
-        padding: 1.5rem;
+        backdrop-filter: blur(20px);
+        border-radius: 20px;
+        padding: 2rem;
         margin: 1rem 0;
         border: 1px solid rgba(0, 212, 255, 0.3);
         box-shadow: 0 8px 32px 0 rgba(0, 212, 255, 0.2);
+        transition: all 0.3s ease;
+        animation: float 6s ease-in-out infinite;
+    }
+    
+    .insight-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 20px 60px 0 rgba(0, 212, 255, 0.4);
+    }
+    
+    .dashboard-card {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(15px);
+        border-radius: 15px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        cursor: move;
+        transition: all 0.3s ease;
+    }
+    
+    .dashboard-card:hover {
+        border: 1px solid rgba(0, 212, 255, 0.5);
+        box-shadow: 0 12px 40px 0 rgba(0, 212, 255, 0.3);
+    }
+    
+    .floating-action {
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        background: linear-gradient(135deg, #00d4ff, #764ba2);
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        border: none;
+        box-shadow: 0 8px 32px 0 rgba(0, 212, 255, 0.4);
+        cursor: pointer;
+        transition: all 0.3s ease;
+        z-index: 1000;
+    }
+    
+    .floating-action:hover {
+        transform: scale(1.1);
+        box-shadow: 0 12px 40px 0 rgba(0, 212, 255, 0.6);
     }
     
     .stSelectbox > div > div {
         background: rgba(255, 255, 255, 0.1);
         backdrop-filter: blur(10px);
         border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
     }
     
     .uploadedFile {
         background: rgba(0, 212, 255, 0.1);
-        border-radius: 10px;
+        border-radius: 15px;
+        padding: 1.5rem;
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        animation: pulse 2s infinite;
+    }
+    
+    .sidebar-nav {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(15px);
+        border-radius: 15px;
         padding: 1rem;
+        margin: 0.5rem 0;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .chart-container {
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        padding: 1rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        margin: 1rem 0;
+    }
+    
+    .status-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 8px;
+        animation: pulse 2s infinite;
+    }
+    
+    .status-online { background: #00ff88; }
+    .status-processing { background: #ffa500; }
+    .status-error { background: #ff4444; }
+    
+    .tooltip {
+        position: relative;
+        cursor: help;
+    }
+    
+    .tooltip:hover::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        padding: 0.5rem;
+        border-radius: 5px;
+        font-size: 0.8rem;
+        white-space: nowrap;
+        z-index: 1000;
+        top: -2rem;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+    
+    .particle-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: -1;
+    }
+    
+    .breadcrumb {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border-radius: 25px;
+        padding: 0.5rem 1rem;
+        margin: 1rem 0;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .search-bar {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(20px);
+        border-radius: 25px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 0.75rem 1.5rem;
+        width: 100%;
+        margin: 1rem 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -87,7 +252,7 @@ class DataAnalyzer:
             if api_key:
                 self.openai_client = OpenAI(api_key=api_key)
     
-    def load_data(self, uploaded_file) -> pd.DataFrame:
+    def load_data(self, uploaded_file) -> Optional[pd.DataFrame]:
         """Load and parse uploaded file with error handling"""
         try:
             if uploaded_file.name.endswith('.csv'):
@@ -446,8 +611,8 @@ def main():
         df = analyzer.df
         
         # Create tabs for different views
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "🔍 Overview", "📊 Visualizations", "🤖 AI Insights", "💬 Natural Language", "⚙️ Advanced"
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+            "🔍 Overview", "📊 Visualizations", "🤖 AI Insights", "💬 Natural Language", "🏗️ Dashboard Builder", "🗺️ Geographic Maps", "⚙️ Advanced"
         ])
         
         with tab1:
@@ -519,7 +684,7 @@ def main():
             # Chart type selection
             chart_type = st.selectbox(
                 "Select Chart Type:",
-                ["Line Chart", "Bar Chart", "Scatter Plot", "Heatmap", "Histogram", "Box Plot", "Pie Chart"]
+                ["Line Chart", "Bar Chart", "Scatter Plot", "Heatmap", "Histogram", "Box Plot", "Pie Chart", "Treemap", "Sankey Diagram", "Sunburst Chart", "Waterfall Chart"]
             )
             
             col1, col2 = st.columns(2)
@@ -531,9 +696,18 @@ def main():
                 date_cols = df.select_dtypes(include=['datetime64']).columns.tolist()
                 all_cols = df.columns.tolist()
                 
+                # Initialize variables
+                x_col = None
+                y_col = None
+                color_col = None
+                selected_cols = []
+                category_col = None
+                value_col = None
+                agg_func = "sum"
+                
                 if chart_type in ["Line Chart", "Bar Chart", "Scatter Plot"]:
                     x_col = st.selectbox("X-axis:", all_cols)
-                    y_col = st.selectbox("Y-axis:", numeric_cols)
+                    y_col = st.selectbox("Y-axis:", numeric_cols) if numeric_cols else None
                     color_col = st.selectbox("Color by:", [None] + categorical_cols)
                 elif chart_type == "Heatmap":
                     if len(numeric_cols) >= 2:
@@ -542,11 +716,13 @@ def main():
                         st.warning("Need at least 2 numeric columns for heatmap")
                         selected_cols = []
                 elif chart_type in ["Histogram", "Box Plot"]:
-                    y_col = st.selectbox("Column to analyze:", numeric_cols)
+                    y_col = st.selectbox("Column to analyze:", numeric_cols) if numeric_cols else None
                     color_col = st.selectbox("Group by:", [None] + categorical_cols)
                 elif chart_type == "Pie Chart":
-                    category_col = st.selectbox("Category column:", categorical_cols)
+                    category_col = st.selectbox("Category column:", categorical_cols) if categorical_cols else None
                     value_col = st.selectbox("Value column (optional):", [None] + numeric_cols)
+                elif chart_type in ["Treemap", "Sunburst Chart", "Waterfall Chart", "Sankey Diagram"]:
+                    st.info(f"Advanced chart type: {chart_type} - Configure options below")
             
             with col2:
                 # Chart customization
@@ -603,8 +779,8 @@ def main():
                     fig = px.box(df, y=y_col, color=color_col,
                                color_discrete_sequence=px.colors.qualitative.Set3)
                 
-                elif chart_type == "Pie Chart" and category_col:
-                    if value_col:
+                elif chart_type == "Pie Chart" and 'category_col' in locals():
+                    if 'value_col' in locals() and value_col:
                         pie_data = df.groupby(category_col)[value_col].sum().reset_index()
                         fig = px.pie(pie_data, values=value_col, names=category_col,
                                    color_discrete_sequence=px.colors.qualitative.Set3)
@@ -613,6 +789,82 @@ def main():
                         pie_data.columns = [category_col, 'count']
                         fig = px.pie(pie_data, values='count', names=category_col,
                                    color_discrete_sequence=px.colors.qualitative.Set3)
+                
+                elif chart_type == "Treemap" and len(categorical_cols) > 0:
+                    if len(categorical_cols) >= 2:
+                        path_cols = categorical_cols[:2]
+                        if len(numeric_cols) > 0:
+                            value_col = numeric_cols[0]
+                            treemap_data = df.groupby(path_cols)[value_col].sum().reset_index()
+                            fig = px.treemap(treemap_data, path=path_cols, values=value_col,
+                                           color=value_col, color_continuous_scale=color_scheme)
+                        else:
+                            treemap_data = df.groupby(path_cols).size().reset_index(name='count')
+                            fig = px.treemap(treemap_data, path=path_cols, values='count')
+                    else:
+                        st.warning("Treemap requires at least 2 categorical columns")
+                
+                elif chart_type == "Sunburst Chart" and len(categorical_cols) > 0:
+                    if len(categorical_cols) >= 2:
+                        path_cols = categorical_cols[:3]  # Up to 3 levels
+                        if len(numeric_cols) > 0:
+                            value_col = numeric_cols[0]
+                            sunburst_data = df.groupby(path_cols)[value_col].sum().reset_index()
+                            fig = px.sunburst(sunburst_data, path=path_cols, values=value_col,
+                                            color=value_col, color_continuous_scale=color_scheme)
+                        else:
+                            sunburst_data = df.groupby(path_cols).size().reset_index(name='count')
+                            fig = px.sunburst(sunburst_data, path=path_cols, values='count')
+                    else:
+                        st.warning("Sunburst chart requires at least 2 categorical columns")
+                
+                elif chart_type == "Waterfall Chart" and len(numeric_cols) > 0:
+                    if len(categorical_cols) > 0:
+                        cat_col = categorical_cols[0]
+                        num_col = numeric_cols[0]
+                        waterfall_data = df.groupby(cat_col)[num_col].sum().reset_index()
+                        
+                        fig = go.Figure(go.Waterfall(
+                            name="Waterfall",
+                            orientation="v",
+                            measure=["relative"] * len(waterfall_data),
+                            x=waterfall_data[cat_col],
+                            y=waterfall_data[num_col],
+                            connector={"line": {"color": "rgb(63, 63, 63)"}},
+                        ))
+                        fig.update_layout(title="Waterfall Chart", template="plotly_dark")
+                    else:
+                        st.warning("Waterfall chart requires at least one categorical column")
+                
+                elif chart_type == "Sankey Diagram" and len(categorical_cols) >= 2:
+                    source_col, target_col = categorical_cols[0], categorical_cols[1]
+                    
+                    # Create source-target pairs
+                    sankey_data = df.groupby([source_col, target_col]).size().reset_index(name='value')
+                    
+                    # Create unique labels
+                    sources = sankey_data[source_col].unique()
+                    targets = sankey_data[target_col].unique()
+                    all_labels = list(sources) + [t for t in targets if t not in sources]
+                    
+                    # Map to indices
+                    label_map = {label: i for i, label in enumerate(all_labels)}
+                    
+                    fig = go.Figure(data=[go.Sankey(
+                        node=dict(
+                            pad=15,
+                            thickness=20,
+                            line=dict(color="black", width=0.5),
+                            label=all_labels,
+                            color="blue"
+                        ),
+                        link=dict(
+                            source=[label_map[s] for s in sankey_data[source_col]],
+                            target=[label_map[t] for t in sankey_data[target_col]],
+                            value=sankey_data['value']
+                        )
+                    )])
+                    fig.update_layout(title_text="Sankey Diagram", font_size=10, template="plotly_dark")
                 
                 if fig:
                     fig.update_layout(
@@ -808,6 +1060,240 @@ def main():
                                 st.error(f"Error creating visualization: {str(e)}")
         
         with tab5:
+            st.markdown("## 🏗️ Dashboard Builder")
+            
+            # Initialize session state for dashboard
+            if 'dashboard_widgets' not in st.session_state:
+                st.session_state.dashboard_widgets = []
+            
+            # Dashboard controls
+            col1, col2, col3 = st.columns([2, 1, 1])
+            
+            with col1:
+                st.markdown("### Add Widgets to Dashboard")
+                widget_type = st.selectbox(
+                    "Widget Type:",
+                    ["Metric Card", "Chart Widget", "Data Table", "Insight Card", "Filter Panel"]
+                )
+            
+            with col2:
+                if st.button("➕ Add Widget", type="primary"):
+                    widget_config = {
+                        'type': widget_type,
+                        'id': len(st.session_state.dashboard_widgets),
+                        'title': f"{widget_type} {len(st.session_state.dashboard_widgets) + 1}"
+                    }
+                    
+                    if widget_type == "Metric Card" and len(numeric_cols) > 0:
+                        widget_config['column'] = numeric_cols[0]
+                        widget_config['aggregation'] = 'sum'
+                    elif widget_type == "Chart Widget":
+                        widget_config['chart_type'] = 'bar'
+                        widget_config['x_col'] = categorical_cols[0] if categorical_cols else None
+                        widget_config['y_col'] = numeric_cols[0] if numeric_cols else None
+                    
+                    st.session_state.dashboard_widgets.append(widget_config)
+            
+            with col3:
+                if st.button("🗑️ Clear Dashboard"):
+                    st.session_state.dashboard_widgets = []
+                    st.rerun()
+            
+            # Layout configuration
+            st.markdown("### Dashboard Layout")
+            layout_cols = st.slider("Columns per row:", 1, 4, 2)
+            
+            # Render dashboard
+            if st.session_state.dashboard_widgets:
+                st.markdown("### 📊 Live Dashboard")
+                
+                # Create responsive grid
+                widgets_per_row = layout_cols
+                rows = [st.session_state.dashboard_widgets[i:i + widgets_per_row] 
+                       for i in range(0, len(st.session_state.dashboard_widgets), widgets_per_row)]
+                
+                for row in rows:
+                    cols = st.columns(len(row))
+                    
+                    for i, widget in enumerate(row):
+                        with cols[i]:
+                            # Widget container with glassmorphism styling
+                            st.markdown(f"""
+                            <div class="dashboard-card">
+                                <h4>📈 {widget['title']}</h4>
+                            """, unsafe_allow_html=True)
+                            
+                            try:
+                                if widget['type'] == "Metric Card" and 'column' in widget:
+                                    col_data = df[widget['column']]
+                                    if widget.get('aggregation') == 'sum':
+                                        value = col_data.sum()
+                                    elif widget.get('aggregation') == 'mean':
+                                        value = col_data.mean()
+                                    elif widget.get('aggregation') == 'max':
+                                        value = col_data.max()
+                                    else:
+                                        value = col_data.count()
+                                    
+                                    st.metric(widget['column'], f"{value:,.2f}" if isinstance(value, float) else f"{value:,}")
+                                
+                                elif widget['type'] == "Chart Widget":
+                                    if widget.get('x_col') and widget.get('y_col'):
+                                        chart_data = df.groupby(widget['x_col'])[widget['y_col']].sum().reset_index()
+                                        fig = px.bar(chart_data, x=widget['x_col'], y=widget['y_col'],
+                                                   height=300, template="plotly_dark")
+                                        st.plotly_chart(fig, use_container_width=True)
+                                
+                                elif widget['type'] == "Data Table":
+                                    st.dataframe(df.head(5), use_container_width=True)
+                                
+                                elif widget['type'] == "Insight Card":
+                                    insights = analyzer.generate_insights()
+                                    if insights:
+                                        st.info(insights[0])
+                                    else:
+                                        st.info("No insights available")
+                                
+                                elif widget['type'] == "Filter Panel":
+                                    if categorical_cols:
+                                        filter_col = categorical_cols[0]
+                                        unique_vals = df[filter_col].unique()
+                                        selected = st.multiselect(f"Filter {filter_col}:", unique_vals, key=f"filter_{widget['id']}")
+                            
+                            except Exception as e:
+                                st.error(f"Widget error: {str(e)}")
+                            
+                            st.markdown("</div>", unsafe_allow_html=True)
+                
+                # Dashboard export
+                st.markdown("### 💾 Dashboard Export")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.button("📱 Export Dashboard Config"):
+                        dashboard_config = {
+                            'widgets': st.session_state.dashboard_widgets,
+                            'layout_cols': layout_cols,
+                            'timestamp': datetime.now().isoformat()
+                        }
+                        config_json = json.dumps(dashboard_config, indent=2)
+                        st.download_button(
+                            label="Download Config",
+                            data=config_json,
+                            file_name=f"dashboard_config_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                            mime="application/json"
+                        )
+                
+                with col2:
+                    uploaded_config = st.file_uploader("📁 Import Dashboard Config", type=['json'])
+                    if uploaded_config:
+                        try:
+                            config_data = json.loads(uploaded_config.read())
+                            st.session_state.dashboard_widgets = config_data.get('widgets', [])
+                            st.success("Dashboard configuration imported!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error importing config: {str(e)}")
+            
+            else:
+                st.info("Add widgets to start building your dashboard!")
+        
+        with tab6:
+            st.markdown("## 🗺️ Geographic Maps")
+            
+            # Check for geographic data
+            potential_lat_cols = [col for col in df.columns if any(term in col.lower() for term in ['lat', 'latitude'])]
+            potential_lon_cols = [col for col in df.columns if any(term in col.lower() for term in ['lon', 'lng', 'longitude'])]
+            potential_location_cols = [col for col in df.columns if any(term in col.lower() for term in ['city', 'state', 'country', 'location', 'address'])]
+            
+            if potential_lat_cols and potential_lon_cols:
+                st.markdown("### 📍 Coordinate-based Maps")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    lat_col = st.selectbox("Latitude column:", potential_lat_cols)
+                    lon_col = st.selectbox("Longitude column:", potential_lon_cols)
+                
+                with col2:
+                    map_style = st.selectbox("Map Style:", ["open-street-map", "carto-positron", "carto-darkmatter", "satellite"])
+                    size_col = st.selectbox("Size by:", [None] + numeric_cols)
+                    color_col = st.selectbox("Color by:", [None] + numeric_cols + categorical_cols)
+                
+                if st.button("🗺️ Generate Map"):
+                    # Filter out invalid coordinates
+                    map_data = df.dropna(subset=[lat_col, lon_col])
+                    map_data = map_data[
+                        (map_data[lat_col] >= -90) & (map_data[lat_col] <= 90) &
+                        (map_data[lon_col] >= -180) & (map_data[lon_col] <= 180)
+                    ]
+                    
+                    if len(map_data) > 0:
+                        fig = px.scatter_mapbox(
+                            map_data,
+                            lat=lat_col,
+                            lon=lon_col,
+                            color=color_col,
+                            size=size_col,
+                            hover_data=df.columns.tolist()[:5],  # Show first 5 columns on hover
+                            mapbox_style=map_style,
+                            height=600,
+                            zoom=3
+                        )
+                        fig.update_layout(template="plotly_dark")
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        st.success(f"Plotted {len(map_data)} points on the map!")
+                    else:
+                        st.warning("No valid coordinate data found.")
+            
+            elif potential_location_cols:
+                st.markdown("### 🏙️ Location-based Maps")
+                st.info("Geographic mapping requires coordinate data (latitude/longitude). Consider geocoding your location data.")
+                
+                location_col = st.selectbox("Location column:", potential_location_cols)
+                st.markdown(f"**Sample locations from {location_col}:**")
+                sample_locations = df[location_col].dropna().unique()[:10]
+                for loc in sample_locations:
+                    st.write(f"• {loc}")
+                
+                st.markdown("""
+                **To create geographic maps:**
+                1. Add latitude and longitude columns to your data
+                2. Use a geocoding service to convert addresses to coordinates
+                3. Ensure coordinate columns contain valid numeric values
+                """)
+            
+            else:
+                st.markdown("### 📍 No Geographic Data Detected")
+                st.info("""
+                To create geographic visualizations, your data should include:
+                
+                **Option 1: Coordinate Data**
+                - Latitude column (e.g., 'lat', 'latitude')
+                - Longitude column (e.g., 'lon', 'lng', 'longitude')
+                
+                **Option 2: Location Data**
+                - City, state, or country columns
+                - Address information
+                
+                You can add sample geographic data or upload a dataset with location information.
+                """)
+                
+                if st.button("📍 Generate Sample Geographic Data"):
+                    # Create sample data with coordinates
+                    cities_data = {
+                        'City': ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia', 'San Antonio', 'San Diego', 'Dallas', 'San Jose'],
+                        'Latitude': [40.7128, 34.0522, 41.8781, 29.7604, 33.4484, 39.9526, 29.4241, 32.7157, 32.7767, 37.3382],
+                        'Longitude': [-74.0060, -118.2437, -87.6298, -95.3698, -112.0740, -75.1652, -98.4936, -117.1611, -96.7970, -121.8863],
+                        'Population': [8398748, 3990456, 2705994, 2320268, 1680992, 1584064, 1547253, 1423851, 1343573, 1021795],
+                        'State': ['NY', 'CA', 'IL', 'TX', 'AZ', 'PA', 'TX', 'CA', 'TX', 'CA']
+                    }
+                    geo_df = pd.DataFrame(cities_data)
+                    analyzer.df = geo_df
+                    st.success("Sample geographic data generated! Check the Overview tab to see the new data.")
+                    st.rerun()
+        
+        with tab7:
             st.markdown("## ⚙️ Advanced Analytics")
             
             # Data filtering
