@@ -9,3 +9,56 @@ primaryColor = "#00d4ff"
 backgroundColor = "#0e1117"
 secondaryBackgroundColor = "#262730"
 textColor = "#fafafa"
+[global]
+# Development vs production mode
+developmentMode = true
+
+# Disable usage stats collection
+showWarningOnDirectExecution = false
+
+[server]
+# Server settings
+port = 5000
+address = "0.0.0.0"
+baseUrlPath = ""
+enableCORS = false
+enableXsrfProtection = true
+maxUploadSize = 200
+
+# Auto-reload settings
+runOnSave = true
+allowRunOnSave = true
+
+[browser]
+# Browser settings
+gatherUsageStats = false
+showWarningOnDirectExecution = false
+
+[theme]
+# App theme configuration
+primaryColor = "#00d4ff"
+backgroundColor = "#0e1117"
+secondaryBackgroundColor = "#262730"
+textColor = "#fafafa"
+font = "sans serif"
+
+[client]
+# Client settings
+caching = true
+displayEnabled = true
+showErrorDetails = true
+
+[runner]
+# Runner settings
+magicEnabled = true
+installTracer = false
+fixMatplotlib = true
+
+[mapbox]
+# Mapbox token (if using mapbox maps)
+# token = "your_mapbox_token_here"
+
+[deprecation]
+# Handle deprecation warnings
+showfileUploaderEncoding = false
+showImageFormat = false
