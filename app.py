@@ -13,11 +13,14 @@ from datetime import datetime, timedelta
 import re
 from typing import Dict, List, Any, Optional
 import warnings
-import sqlalchemy
-from sqlalchemy import create_engine, text, Column, Integer, String, Float, DateTime, Text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-import psycopg2
+try:
+    from pymongo import MongoClient
+    from pymongo.errors import ConnectionFailure
+    from bson.objectid import ObjectId
+    import pymongo
+    MONGODB_AVAILABLE = True
+except ImportError:
+    MONGODB_AVAILABLE = False
 warnings.filterwarnings('ignore')
 
 # OpenAI integration
@@ -248,79 +251,61 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Database setup
-Base = declarative_base()
-
-class Dataset(Base):
-    __tablename__ = 'datasets'
-    
-    id = Column(Integer, primary_key=True)
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
-    file_type = Column(String(50))
-    upload_date = Column(DateTime, default=datetime.utcnow)
-    row_count = Column(Integer)
-    column_count = Column(Integer)
-    data_quality_score = Column(Float)
-
-class Analysis(Base):
-    __tablename__ = 'analyses'
-    
-    id = Column(Integer, primary_key=True)
-    dataset_id = Column(Integer)
-    analysis_type = Column(String(100))
-    chart_type = Column(String(100))
-    configuration = Column(Text)  # JSON string
-    insights = Column(Text)
-    created_date = Column(DateTime, default=datetime.utcnow)
-    user_id = Column(String(100), default='default_user')
-
-class Comment(Base):
-    __tablename__ = 'comments'
-    
-    id = Column(Integer, primary_key=True)
-    analysis_id = Column(Integer)
-    user_id = Column(String(100))
-    comment_text = Column(Text)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+# MongoDB document schemas (for reference, not enforced)
+# Documents will be stored in collections: datasets, analyses, comments
 
 class DatabaseManager:
     def __init__(self):
-        self.engine = None
-        self.Session = None
+        self.client = None
+        self.db = None
         self.init_database()
     
     def init_database(self):
         try:
-            database_url = os.getenv("DATABASE_URL")
-            if database_url:
-                self.engine = create_engine(database_url)
-                Base.metadata.create_all(self.engine)
-                self.Session = sessionmaker(bind=self.engine)
+            if not MONGODB_AVAILABLE:
+                st.warning("MongoDB not available. Install pymongo to use database features.")
+                return
+                
+            # Try MongoDB Atlas first, then local MongoDB
+            mongodb_uri = os.getenv("MONGODB_URI") or os.getenv("MONGO_URI")
+            
+            if not mongodb_uri:
+                # Try local MongoDB connection
+                mongodb_uri = "mongodb://localhost:27017/"
+            
+            self.client = MongoClient(mongodb_uri, serverSelectionTimeoutMS=5000)
+            # Test connection
+            self.client.admin.command('ping')
+            
+            # Use database name from URI or default
+            db_name = os.getenv("MONGODB_DB_NAME", "dataviz_pro")
+            self.db = self.client[db_name]
+            
+        except ConnectionFailure:
+            st.warning("MongoDB connection failed. Database features disabled.")
+            self.client = None
+            self.db = None
         except Exception as e:
-            st.error(f"Database connection failed: {str(e)}")
+            st.warning(f"Database initialization failed: {str(e)}")
+            self.client = None
+            self.db = None
     
     def save_dataset(self, name, description, file_type, df):
-        if not self.Session:
+        if not self.db:
             return None
-        session = self.Session()
         try:
-            dataset = Dataset(
-                name=name,
-                description=description,
-                file_type=file_type,
-                row_count=len(df),
-                column_count=len(df.columns),
-                data_quality_score=self.calculate_data_quality(df)
-            )
-            session.add(dataset)
-            session.commit()
-            dataset_id = dataset.id
-            session.close()
-            return dataset_id
+            dataset_doc = {
+                "name": name,
+                "description": description,
+                "file_type": file_type,
+                "upload_date": datetime.utcnow(),
+                "row_count": len(df),
+                "column_count": len(df.columns),
+                "data_quality_score": self.calculate_data_quality(df)
+            }
+            result = self.db.datasets.insert_one(dataset_doc)
+            return str(result.inserted_id)
         except Exception as e:
-            session.rollback()
-            session.close()
             st.error(f"Error saving dataset: {str(e)}")
             return None
     
@@ -330,48 +315,75 @@ class DatabaseManager:
         return ((total_cells - null_cells) / total_cells) * 100
     
     def get_datasets(self):
-        if not self.Session:
+        if not self.db:
             return []
-        session = self.Session()
         try:
-            datasets = session.query(Dataset).order_by(Dataset.upload_date.desc()).all()
-            result = [{
-                'id': d.id,
-                'name': d.name,
-                'description': d.description,
-                'file_type': d.file_type,
-                'upload_date': d.upload_date,
-                'row_count': d.row_count,
-                'column_count': d.column_count,
-                'data_quality_score': d.data_quality_score
-            } for d in datasets]
-            session.close()
+            datasets = list(self.db.datasets.find().sort("upload_date", -1).limit(50))
+            result = []
+            for d in datasets:
+                result.append({
+                    'id': str(d['_id']),
+                    'name': d.get('name', 'Unknown'),
+                    'description': d.get('description', ''),
+                    'file_type': d.get('file_type', 'unknown'),
+                    'upload_date': d.get('upload_date', datetime.utcnow()),
+                    'row_count': d.get('row_count', 0),
+                    'column_count': d.get('column_count', 0),
+                    'data_quality_score': d.get('data_quality_score', 0)
+                })
             return result
         except Exception as e:
-            session.close()
+            st.error(f"Error retrieving datasets: {str(e)}")
             return []
     
     def save_analysis(self, dataset_id, analysis_type, chart_type, config, insights):
-        if not self.Session:
+        if not self.db:
             return None
-        session = self.Session()
         try:
-            analysis = Analysis(
-                dataset_id=dataset_id,
-                analysis_type=analysis_type,
-                chart_type=chart_type,
-                configuration=json.dumps(config),
-                insights=insights
-            )
-            session.add(analysis)
-            session.commit()
-            analysis_id = analysis.id
-            session.close()
-            return analysis_id
+            analysis_doc = {
+                "dataset_id": dataset_id,
+                "analysis_type": analysis_type,
+                "chart_type": chart_type,
+                "configuration": config,  # Store as dict, not JSON string
+                "insights": insights,
+                "created_date": datetime.utcnow(),
+                "user_id": "default_user"
+            }
+            result = self.db.analyses.insert_one(analysis_doc)
+            return str(result.inserted_id)
         except Exception as e:
-            session.rollback()
-            session.close()
+            st.error(f"Error saving analysis: {str(e)}")
             return None
+    
+    def save_comment(self, analysis_id, user_id, comment_text):
+        if not self.db:
+            return None
+        try:
+            comment_doc = {
+                "analysis_id": analysis_id,
+                "user_id": user_id,
+                "comment_text": comment_text,
+                "timestamp": datetime.utcnow()
+            }
+            result = self.db.comments.insert_one(comment_doc)
+            return str(result.inserted_id)
+        except Exception as e:
+            st.error(f"Error saving comment: {str(e)}")
+            return None
+    
+    def get_comments(self, analysis_id):
+        if not self.db:
+            return []
+        try:
+            comments = list(self.db.comments.find({"analysis_id": analysis_id}).sort("timestamp", -1))
+            return [{
+                'id': str(c['_id']),
+                'user_id': c.get('user_id', 'Anonymous'),
+                'comment_text': c.get('comment_text', ''),
+                'timestamp': c.get('timestamp', datetime.utcnow())
+            } for c in comments]
+        except Exception as e:
+            return []
 
 class DataAnalyzer:
     def __init__(self):
@@ -688,10 +700,22 @@ def main():
         st.markdown("### 🎛️ Control Panel")
         
         # Database status
-        if analyzer.db_manager.engine:
+        if analyzer.db_manager.db:
             st.markdown("""
             <div style="background: rgba(0, 255, 136, 0.1); padding: 0.5rem; border-radius: 8px; margin-bottom: 1rem;">
-                <span class="status-indicator status-online"></span>Database Connected
+                <span class="status-indicator status-online"></span>MongoDB Connected
+            </div>
+            """, unsafe_allow_html=True)
+        elif MONGODB_AVAILABLE:
+            st.markdown("""
+            <div style="background: rgba(255, 136, 0, 0.1); padding: 0.5rem; border-radius: 8px; margin-bottom: 1rem;">
+                <span class="status-indicator status-processing"></span>MongoDB Available (Not Connected)
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style="background: rgba(255, 0, 0, 0.1); padding: 0.5rem; border-radius: 8px; margin-bottom: 1rem;">
+                <span class="status-indicator status-error"></span>MongoDB Not Available
             </div>
             """, unsafe_allow_html=True)
         
