@@ -1,14 +1,4 @@
-[server]
-headless = true
-address = "0.0.0.0"
-port = 5000
 
-[theme]
-base = "dark"
-primaryColor = "#00d4ff"
-backgroundColor = "#0e1117"
-secondaryBackgroundColor = "#262730"
-textColor = "#fafafa"
 [global]
 # Development vs production mode
 developmentMode = true
@@ -18,8 +8,9 @@ showWarningOnDirectExecution = false
 
 [server]
 # Server settings
-port = 5000
+headless = true
 address = "0.0.0.0"
+port = 5000
 baseUrlPath = ""
 enableCORS = false
 enableXsrfProtection = true
@@ -36,6 +27,7 @@ showWarningOnDirectExecution = false
 
 [theme]
 # App theme configuration
+base = "dark"
 primaryColor = "#00d4ff"
 backgroundColor = "#0e1117"
 secondaryBackgroundColor = "#262730"
