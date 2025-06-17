@@ -275,7 +275,7 @@ class DatabaseManager:
                 # Try MongoDB Atlas first, then local MongoDB
                 mongodb_uri = os.getenv("MONGODB_URI") or os.getenv("MONGO_URI")
                 
-                if mongodb_uri and not mongodb_uri.startswith("mongodb+srv://<username>"):
+                if mongodb_uri:
                     self.client = MongoClient(mongodb_uri, serverSelectionTimeoutMS=5000)
                     # Test connection
                     self.client.admin.command('ping')
@@ -284,6 +284,7 @@ class DatabaseManager:
                     db_name = os.getenv("MONGODB_DB_NAME", "dataviz_pro")
                     self.db = self.client[db_name]
                     self.db_type = "mongodb"
+                    st.success("✅ MongoDB Atlas connected successfully!")
                     return
                     
             except ConnectionFailure:
@@ -309,21 +310,83 @@ class DatabaseManager:
         self.db = None
         self.db_type = None
     
+    def init_postgresql_tables(self):
+        """Initialize PostgreSQL tables if they don't exist"""
+        try:
+            cursor = self.db.cursor()
+            
+            # Create datasets table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS datasets (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    file_type VARCHAR(50),
+                    upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    row_count INTEGER,
+                    column_count INTEGER,
+                    data_quality_score FLOAT
+                )
+            """)
+            
+            # Create analyses table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS analyses (
+                    id SERIAL PRIMARY KEY,
+                    dataset_id INTEGER,
+                    analysis_type VARCHAR(100),
+                    chart_type VARCHAR(100),
+                    configuration JSONB,
+                    insights TEXT,
+                    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    user_id VARCHAR(100)
+                )
+            """)
+            
+            # Create comments table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS comments (
+                    id SERIAL PRIMARY KEY,
+                    analysis_id INTEGER,
+                    user_id VARCHAR(100),
+                    comment_text TEXT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            self.db.commit()
+            cursor.close()
+            
+        except Exception as e:
+            st.error(f"Error initializing PostgreSQL tables: {str(e)}")
+            self.db.rollback()
+    
     def save_dataset(self, name, description, file_type, df):
         if not self.db:
             return None
         try:
-            dataset_doc = {
-                "name": name,
-                "description": description,
-                "file_type": file_type,
-                "upload_date": datetime.utcnow(),
-                "row_count": len(df),
-                "column_count": len(df.columns),
-                "data_quality_score": self.calculate_data_quality(df)
-            }
-            result = self.db.datasets.insert_one(dataset_doc)
-            return str(result.inserted_id)
+            if self.db_type == "mongodb":
+                dataset_doc = {
+                    "name": name,
+                    "description": description,
+                    "file_type": file_type,
+                    "upload_date": datetime.utcnow(),
+                    "row_count": len(df),
+                    "column_count": len(df.columns),
+                    "data_quality_score": self.calculate_data_quality(df)
+                }
+                result = self.db.datasets.insert_one(dataset_doc)
+                return str(result.inserted_id)
+            elif self.db_type == "postgresql":
+                cursor = self.db.cursor()
+                cursor.execute("""
+                    INSERT INTO datasets (name, description, file_type, row_count, column_count, data_quality_score)
+                    VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
+                """, (name, description, file_type, len(df), len(df.columns), self.calculate_data_quality(df)))
+                dataset_id = cursor.fetchone()[0]
+                self.db.commit()
+                cursor.close()
+                return str(dataset_id)
         except Exception as e:
             st.error(f"Error saving dataset: {str(e)}")
             return None
@@ -337,20 +400,40 @@ class DatabaseManager:
         if not self.db:
             return []
         try:
-            datasets = list(self.db.datasets.find().sort("upload_date", -1).limit(50))
-            result = []
-            for d in datasets:
-                result.append({
-                    'id': str(d['_id']),
-                    'name': d.get('name', 'Unknown'),
-                    'description': d.get('description', ''),
-                    'file_type': d.get('file_type', 'unknown'),
-                    'upload_date': d.get('upload_date', datetime.utcnow()),
-                    'row_count': d.get('row_count', 0),
-                    'column_count': d.get('column_count', 0),
-                    'data_quality_score': d.get('data_quality_score', 0)
-                })
-            return result
+            if self.db_type == "mongodb":
+                datasets = list(self.db.datasets.find().sort("upload_date", -1).limit(50))
+                result = []
+                for d in datasets:
+                    result.append({
+                        'id': str(d['_id']),
+                        'name': d.get('name', 'Unknown'),
+                        'description': d.get('description', ''),
+                        'file_type': d.get('file_type', 'unknown'),
+                        'upload_date': d.get('upload_date', datetime.utcnow()),
+                        'row_count': d.get('row_count', 0),
+                        'column_count': d.get('column_count', 0),
+                        'data_quality_score': d.get('data_quality_score', 0)
+                    })
+                return result
+            elif self.db_type == "postgresql":
+                cursor = self.db.cursor(cursor_factory=RealDictCursor)
+                cursor.execute("""
+                    SELECT id, name, description, file_type, upload_date, 
+                           row_count, column_count, data_quality_score
+                    FROM datasets ORDER BY upload_date DESC LIMIT 50
+                """)
+                datasets = cursor.fetchall()
+                cursor.close()
+                return [{
+                    'id': str(d['id']),
+                    'name': d['name'] or 'Unknown',
+                    'description': d['description'] or '',
+                    'file_type': d['file_type'] or 'unknown',
+                    'upload_date': d['upload_date'] or datetime.utcnow(),
+                    'row_count': d['row_count'] or 0,
+                    'column_count': d['column_count'] or 0,
+                    'data_quality_score': d['data_quality_score'] or 0
+                } for d in datasets]
         except Exception as e:
             st.error(f"Error retrieving datasets: {str(e)}")
             return []
