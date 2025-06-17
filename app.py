@@ -362,7 +362,7 @@ class DatabaseManager:
             self.db.rollback()
     
     def save_dataset(self, name, description, file_type, df):
-        if not self.db:
+        if self.db is None:
             return None
         try:
             if self.db_type == "mongodb":
@@ -397,7 +397,7 @@ class DatabaseManager:
         return ((total_cells - null_cells) / total_cells) * 100
     
     def get_datasets(self):
-        if not self.db:
+        if self.db is None:
             return []
         try:
             if self.db_type == "mongodb":
@@ -439,7 +439,7 @@ class DatabaseManager:
             return []
     
     def save_analysis(self, dataset_id, analysis_type, chart_type, config, insights):
-        if not self.db:
+        if self.db is None:
             return None
         try:
             analysis_doc = {
@@ -458,7 +458,7 @@ class DatabaseManager:
             return None
     
     def save_comment(self, analysis_id, user_id, comment_text):
-        if not self.db:
+        if self.db is None:
             return None
         try:
             comment_doc = {
@@ -474,7 +474,7 @@ class DatabaseManager:
             return None
     
     def get_comments(self, analysis_id):
-        if not self.db:
+        if self.db is None:
             return []
         try:
             comments = list(self.db.comments.find({"analysis_id": analysis_id}).sort("timestamp", -1))
@@ -802,7 +802,7 @@ def main():
         st.markdown("### 🎛️ Control Panel")
         
         # Database status
-        if analyzer.db_manager.db:
+        if analyzer.db_manager.db is not None:
             st.markdown("""
             <div style="background: rgba(0, 255, 136, 0.1); padding: 0.5rem; border-radius: 8px; margin-bottom: 1rem;">
                 <span class="status-indicator status-online"></span>MongoDB Connected
