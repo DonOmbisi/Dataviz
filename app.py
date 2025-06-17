@@ -5,17 +5,32 @@ import plotly.express as px
 import plotly.graph_objects as go
 import plotly.figure_factory as ff
 from plotly.subplots import make_subplots
-import json
 import os
+from datetime import datetime, timedelta
+import warnings
+from typing import Dict, List, Any, Optional
+import json
 import io
 import base64
-from datetime import datetime, timedelta
 import re
-from typing import Dict, List, Any, Optional
-import warnings
 import hashlib
 import secrets
 import uuid
+warnings.filterwarnings('ignore')
+
+# Load environment variables first
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+# Global flags for optional dependencies
+MONGODB_AVAILABLE = False
+POSTGRESQL_AVAILABLE = False
+OPENAI_AVAILABLE = False
+
+# MongoDB imports
 try:
     from pymongo import MongoClient
     from pymongo.errors import ConnectionFailure
@@ -25,21 +40,51 @@ try:
 except ImportError:
     MONGODB_AVAILABLE = False
 
-# PostgreSQL fallback support
+# PostgreSQL imports
 try:
     import psycopg2
     from psycopg2.extras import RealDictCursor
     POSTGRESQL_AVAILABLE = True
 except ImportError:
     POSTGRESQL_AVAILABLE = False
-warnings.filterwarnings('ignore')
 
-# OpenAI integration
+# OpenAI imports
 try:
     from openai import OpenAI
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
+
+# Lazy import functions
+@st.cache_data
+def get_pandas():
+    import pandas as pd
+    return pd
+
+@st.cache_data  
+def get_numpy():
+    import numpy as np
+    return np
+
+@st.cache_data
+def get_plotly():
+    import plotly.express as px
+    import plotly.graph_objects as go
+    import plotly.figure_factory as ff
+    from plotly.subplots import make_subplots
+    return px, go, ff, make_subplots
+
+@st.cache_data
+def get_utils():
+    import json
+    import io
+    import base64
+    import re
+    from typing import Dict, List, Any, Optional
+    import hashlib
+    import secrets
+    import uuid
+    return json, io, base64, re, Dict, List, Any, Optional, hashlib, secrets, uuid
 
 # Page configuration
 st.set_page_config(
@@ -808,10 +853,31 @@ class DatabaseManager:
                 "timestamp": datetime.utcnow()
             }
             result = self.db.comments.insert_one(comment_doc)
+            return str(result.inserted_id)
+        except Exception as e:
+            st.error(f"Error saving comment: {str(e)}")
+            return None
 
+    def get_comments(self, analysis_id):
+        """Get comments for a specific analysis"""
+        if self.db is None:
+            return []
+        try:
+            comments = list(self.db.comments.find({"analysis_id": analysis_id}).sort("timestamp", -1))
+            return [{
+                'id': str(c['_id']),
+                'user_id': c.get('user_id', 'Anonymous'),
+                'comment_text': c.get('comment_text', ''),
+                'timestamp': c.get('timestamp', datetime.utcnow())
+            } for c in comments]
+        except Exception as e:
+            return []
 
 def show_auth_ui():
     """Display authentication UI (login/register forms)"""
+    # Get analyzer instance
+    analyzer = get_analyzer()
+    
     st.markdown("""
     <div class="main-header">
         <h1>📊 DataViz Pro</h1>
@@ -915,26 +981,6 @@ def show_auth_ui():
         </div>
     </div>
     """, unsafe_allow_html=True)
-
-
-            return str(result.inserted_id)
-        except Exception as e:
-            st.error(f"Error saving comment: {str(e)}")
-            return None
-    
-    def get_comments(self, analysis_id):
-        if self.db is None:
-            return []
-        try:
-            comments = list(self.db.comments.find({"analysis_id": analysis_id}).sort("timestamp", -1))
-            return [{
-                'id': str(c['_id']),
-                'user_id': c.get('user_id', 'Anonymous'),
-                'comment_text': c.get('comment_text', ''),
-                'timestamp': c.get('timestamp', datetime.utcnow())
-            } for c in comments]
-        except Exception as e:
-            return []
 
 class DataAnalyzer:
     def __init__(self):
