@@ -1,0 +1,116 @@
+Create a modern data analytics and visualization web application using Python with the following comprehensive specifications:
+Core Functionality
+
+CSV/Excel file upload and parsing with robust error handling
+Interactive dashboard builder with drag-and-drop components
+Real-time data filtering, sorting, and grouping
+Export capabilities (PNG, PDF, CSV)
+
+Advanced Features
+
+Natural language query interface - users can ask "Show me sales trends by region" and get automatic visualizations
+AI-powered insight discovery that automatically detects and highlights anomalies, trends, and correlations
+Multiple chart types: line, bar, scatter, heatmap, treemap, sankey diagrams, and geographic maps
+Real-time collaborative features with live updates and commenting
+Custom color themes and branding options
+
+Technical Requirements
+
+Use Python as the primary programming language
+Choose appropriate frameworks: Streamlit (recommended for rapid development), Flask/FastAPI (for more control), or Dash
+Utilize data science libraries: Pandas for data manipulation, NumPy for numerical operations
+Implement visualizations using: Plotly (interactive charts), Matplotlib/Seaborn (statistical plots), or Bokeh
+For file handling: Use Pandas for CSV/Excel, openpyxl for advanced Excel features
+Include data validation and error handling with proper exception management
+Implement caching mechanisms for performance optimization
+
+Python-Specific Features
+
+Leverage Python's data science ecosystem (scikit-learn for ML insights, scipy for statistical analysis)
+Use asyncio for handling concurrent operations if using FastAPI
+Implement proper logging and debugging capabilities
+Create modular code structure with separate modules for data processing, visualization, and web interface
+
+Visual Design & User Experience Requirements
+Stunning Visual Design
+
+Implement a premium design system with consistent spacing, typography, and color hierarchy
+Use dynamic gradient backgrounds that subtly shift based on data themes
+Create glassmorphism UI elements with backdrop blur effects and translucent panels
+Add floating elements with subtle drop shadows and elevation layers
+Implement smooth morphing animations between different visualization types
+Use data-driven color palettes that automatically adapt to dataset characteristics
+Include particle effects or subtle geometric patterns in empty states
+
+Intuitive Navigation & Interaction
+
+Design a collapsible sidebar with contextual menu items that highlight current section
+Implement breadcrumb navigation with clickable path segments
+Create a global search bar with intelligent auto-complete and visual result previews
+Add floating action button (FAB) for quick access to common actions
+Include guided tour/onboarding with interactive hotspots and tooltips
+Implement gesture support for mobile (swipe, pinch-to-zoom, long-press)
+
+Universal Usability
+
+Design with mobile-first approach, ensuring all features work on small screens
+Include one-click templates and wizards for common analysis tasks
+Add smart defaults that work for 80% of use cases out of the box
+Create visual hierarchy with clear primary, secondary, and tertiary actions
+Implement progressive disclosure - show basic options first, advanced on demand
+Add contextual help that appears exactly when and where users need it
+
+Accessibility & Inclusivity
+
+Support high contrast mode and respect system accessibility preferences
+Include keyboard navigation for all interactive elements
+Add screen reader support with descriptive alt text for all visualizations
+Implement focus indicators and skip links for keyboard users
+Support multiple font sizes and dyslexia-friendly typography options
+Ensure color is never the only way to convey information (use patterns, shapes, text)
+
+Smooth Performance
+
+Implement skeleton screens and progressive loading for perceived performance
+Add smooth transitions between all states (loading, error, success, empty)
+Create responsive animations that scale with device capabilities
+Use lazy loading for off-screen elements and large datasets
+Include offline capability indicators and graceful degradation
+
+Delight Factors
+
+Add Easter eggs and delightful micro-interactions (confetti on successful upload, etc.)
+Include personalization options (theme preferences, dashboard layouts)
+Create shareable visualization links with beautiful social media previews
+Add celebration animations for insights discovery
+Include sound effects toggle for audio feedback (subtle and professional)
+
+Architecture & Lightweight Requirements
+
+Minimal File Structure: Create a single-file application or maximum 3-4 files total
+Consolidated Architecture: Combine all functionality into minimal files while maintaining clean code organization
+Embedded Resources: Include all CSS, JavaScript, and styling within the main application files
+Self-Contained: Avoid external dependencies where possible; use only essential libraries
+Modular Functions: Organize code using functions and classes within the same file rather than separate modules
+Inline Styling: Use embedded CSS/styling to reduce file count while maintaining visual appeal
+Streamlined Dependencies: Limit to core libraries only (Streamlit + Plotly + Pandas + NumPy maximum)
+Single Entry Point: Design the application to run from a single main file
+Efficient Code Structure: Use Python's built-in capabilities to minimize external requirements
+Compact Deployment: Ensure the entire application can be easily shared and deployed as a minimal package
+
+Performance Considerations
+
+Implement data chunking for large datasets
+Use efficient data structures and algorithms
+Cache frequently accessed computations
+Optimize visualization rendering for smooth interactions
+
+Additional Requirements
+
+Create sample datasets to demonstrate all capabilities
+Include comprehensive documentation and code comments
+Implement error boundaries with user-friendly error messages
+Add data privacy and security considerations
+Include analytics to track user interactions (with privacy compliance)
+
+Build this application as a lightweight, minimal-file solution (ideally single file, maximum 4 files) that focuses on creating an impressive, professional-grade analytics tool. Despite the compact structure, it should leverage Python's strengths in data processing while providing a modern, intuitive user experience that feels premium and cutting-edge. The application should be so visually appealing and easy to use that it becomes a joy to work with data, while remaining easily shareable and deployable.
