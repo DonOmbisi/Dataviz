@@ -21,6 +21,14 @@ try:
     MONGODB_AVAILABLE = True
 except ImportError:
     MONGODB_AVAILABLE = False
+
+# PostgreSQL fallback support
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    POSTGRESQL_AVAILABLE = True
+except ImportError:
+    POSTGRESQL_AVAILABLE = False
 warnings.filterwarnings('ignore')
 
 # OpenAI integration
@@ -261,34 +269,45 @@ class DatabaseManager:
         self.init_database()
     
     def init_database(self):
-        try:
-            if not MONGODB_AVAILABLE:
-                st.warning("MongoDB not available. Install pymongo to use database features.")
-                return
+        # Try MongoDB first
+        if MONGODB_AVAILABLE:
+            try:
+                # Try MongoDB Atlas first, then local MongoDB
+                mongodb_uri = os.getenv("MONGODB_URI") or os.getenv("MONGO_URI")
                 
-            # Try MongoDB Atlas first, then local MongoDB
-            mongodb_uri = os.getenv("MONGODB_URI") or os.getenv("MONGO_URI")
-            
-            if not mongodb_uri:
-                # Try local MongoDB connection
-                mongodb_uri = "mongodb://localhost:27017/"
-            
-            self.client = MongoClient(mongodb_uri, serverSelectionTimeoutMS=5000)
-            # Test connection
-            self.client.admin.command('ping')
-            
-            # Use database name from URI or default
-            db_name = os.getenv("MONGODB_DB_NAME", "dataviz_pro")
-            self.db = self.client[db_name]
-            
-        except ConnectionFailure:
-            st.warning("MongoDB connection failed. Database features disabled.")
-            self.client = None
-            self.db = None
-        except Exception as e:
-            st.warning(f"Database initialization failed: {str(e)}")
-            self.client = None
-            self.db = None
+                if mongodb_uri and not mongodb_uri.startswith("mongodb+srv://<username>"):
+                    self.client = MongoClient(mongodb_uri, serverSelectionTimeoutMS=5000)
+                    # Test connection
+                    self.client.admin.command('ping')
+                    
+                    # Use database name from URI or default
+                    db_name = os.getenv("MONGODB_DB_NAME", "dataviz_pro")
+                    self.db = self.client[db_name]
+                    self.db_type = "mongodb"
+                    return
+                    
+            except ConnectionFailure:
+                pass
+            except Exception:
+                pass
+        
+        # Fallback to PostgreSQL if available
+        if POSTGRESQL_AVAILABLE:
+            try:
+                database_url = os.getenv("DATABASE_URL")
+                if database_url:
+                    self.db = psycopg2.connect(database_url)
+                    self.db_type = "postgresql"
+                    self.init_postgresql_tables()
+                    return
+            except Exception:
+                pass
+        
+        # No database available
+        st.warning("No database connection available. Using in-memory storage only.")
+        self.client = None
+        self.db = None
+        self.db_type = None
     
     def save_dataset(self, name, description, file_type, df):
         if not self.db:
