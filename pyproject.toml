@@ -29,9 +29,11 @@ database = [
     "dnspython>=2.0.0",
     "psycopg2-binary>=2.9.0",
 ]
+
 forecasting = [
     "prophet>=1.1.5",
 ]
+
 api = [
     "fastapi>=0.109.0",
     "uvicorn>=0.27.0",
@@ -39,10 +41,12 @@ api = [
     "python-multipart>=0.0.6",
     "pydantic>=2.0.0",
 ]
+
 reports = [
     "schedule>=1.2.0",
     "APScheduler>=3.10.0",
 ]
+
 all = [
     "pymongo>=4.6.0",
     "dnspython>=2.0.0",
@@ -56,6 +60,7 @@ all = [
     "schedule>=1.2.0",
     "APScheduler>=3.10.0",
 ]
+
 dev = [
     "pytest>=8.0.0",
     "httpx>=0.27.0",
@@ -70,19 +75,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = [
-    "ab_testing",
-    "api_server",
-    "app",
-    "data_context",
-    "auto_viz",
-    "forecasting_engine",
-    "formula_builder",
-    "report_scheduler",
-    "start_fast",
-    "streaming_engine",
-    "test_db",
-]
+py-modules = []
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
