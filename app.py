@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 import plotly.figure_factory as ff
 from plotly.subplots import make_subplots
 import os
+import time
 from datetime import datetime, timedelta
 import warnings
 from typing import Dict, List, Any, Optional
@@ -55,139 +56,85 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
 
-# Lazy import functions
-@st.cache_data
-def get_pandas():
-    import pandas as pd
-    return pd
+# Groq imports (Free AI alternative - groq.com)
+try:
+    from groq import Groq
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
 
-@st.cache_data  
-def get_numpy():
-    import numpy as np
-    return np
+# Hugging Face imports (Free AI alternative - huggingface.co)
+try:
+    import requests
+    HF_AVAILABLE = True
+except ImportError:
+    HF_AVAILABLE = False
 
-@st.cache_data
-def get_plotly():
-    import plotly.express as px
-    import plotly.graph_objects as go
-    import plotly.figure_factory as ff
-    from plotly.subplots import make_subplots
-    return px, go, ff, make_subplots
+# Guest / local session (no database required for file analysis)
 
-@st.cache_data
-def get_utils():
-    import json
-    import io
-    import base64
-    import re
-    from typing import Dict, List, Any, Optional
-    import hashlib
-    import secrets
-    import uuid
-    return json, io, base64, re, Dict, List, Any, Optional, hashlib, secrets, uuid
+def guest_mode_allowed() -> bool:
+    """File-first default: allow local use without database accounts."""
+    if os.getenv("DATAVIZ_REQUIRE_AUTH", "").lower() in ("1", "true", "yes"):
+        return False
+    return os.getenv("DATAVIZ_GUEST_MODE", "1").lower() not in ("0", "false", "no")
 
-# Page configuration
+
+def is_guest_user(user: Optional[dict]) -> bool:
+    return bool(user and user.get("user_id") == "guest")
+
+
+# Page configuration - Optimized for performance
 st.set_page_config(
-    page_title="DataViz Pro - Advanced Analytics Dashboard",
+    page_title="DataViz Pro",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed",  # Start collapsed for faster initial render
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': None  # Remove menu items for faster load
+    }
 )
 
-# Custom CSS for glassmorphism and modern design
+# Custom CSS - Optimized for Performance
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    /* Performance-optimized CSS - removed animations and heavy effects */
     
     .main-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 2rem;
-        border-radius: 20px;
-        margin-bottom: 2rem;
+        padding: 1.5rem;
+        border-radius: 15px;
+        margin-bottom: 1.5rem;
         color: white;
         text-align: center;
-        backdrop-filter: blur(20px);
-        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .main-header::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
-        animation: shimmer 3s infinite;
-    }
-    
-    @keyframes shimmer {
-        0% { transform: translateX(-100%); }
-        100% { transform: translateX(100%); }
-    }
-    
-    @keyframes float {
-        0%, 100% { transform: translateY(0px); }
-        50% { transform: translateY(-10px); }
-    }
-    
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.7; }
+        box-shadow: 0 4px 16px rgba(31, 38, 135, 0.2);
     }
     
     .metric-card {
-        background: rgba(255, 255, 255, 0.08);
-        backdrop-filter: blur(20px);
-        border-radius: 20px;
-        padding: 2rem;
-        margin: 1rem 0;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-        transition: all 0.3s ease;
-        position: relative;
-    }
-    
-    .metric-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 15px 45px 0 rgba(31, 38, 135, 0.5);
-        border: 1px solid rgba(0, 212, 255, 0.4);
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin: 0.75rem 0;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        box-shadow: 0 2px 8px rgba(31, 38, 135, 0.15);
     }
     
     .insight-card {
-        background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(118, 75, 162, 0.1));
-        backdrop-filter: blur(20px);
-        border-radius: 20px;
-        padding: 2rem;
-        margin: 1rem 0;
-        border: 1px solid rgba(0, 212, 255, 0.3);
-        box-shadow: 0 8px 32px 0 rgba(0, 212, 255, 0.2);
-        transition: all 0.3s ease;
-        animation: float 6s ease-in-out infinite;
-    }
-    
-    .insight-card:hover {
-        transform: translateY(-8px);
-        box-shadow: 0 20px 60px 0 rgba(0, 212, 255, 0.4);
+        background: rgba(0, 212, 255, 0.05);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin: 0.75rem 0;
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        box-shadow: 0 2px 8px rgba(0, 212, 255, 0.1);
     }
     
     .dashboard-card {
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(15px);
-        border-radius: 15px;
-        padding: 1.5rem;
-        margin: 1rem 0;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 10px;
+        padding: 1rem;
+        margin: 0.5rem 0;
         border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-        cursor: move;
-        transition: all 0.3s ease;
-    }
-    
-    .dashboard-card:hover {
-        border: 1px solid rgba(0, 212, 255, 0.5);
-        box-shadow: 0 12px 40px 0 rgba(0, 212, 255, 0.3);
     }
     
     .floating-action {
@@ -196,51 +143,41 @@ st.markdown("""
         right: 2rem;
         background: linear-gradient(135deg, #00d4ff, #764ba2);
         border-radius: 50%;
-        width: 60px;
-        height: 60px;
+        width: 50px;
+        height: 50px;
         border: none;
-        box-shadow: 0 8px 32px 0 rgba(0, 212, 255, 0.4);
+        box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3);
         cursor: pointer;
-        transition: all 0.3s ease;
         z-index: 1000;
     }
     
-    .floating-action:hover {
-        transform: scale(1.1);
-        box-shadow: 0 12px 40px 0 rgba(0, 212, 255, 0.6);
-    }
-    
     .stSelectbox > div > div {
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(10px);
-        border-radius: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
     }
     
     .uploadedFile {
-        background: rgba(0, 212, 255, 0.1);
-        border-radius: 15px;
-        padding: 1.5rem;
-        border: 1px solid rgba(0, 212, 255, 0.3);
-        animation: pulse 2s infinite;
+        background: rgba(0, 212, 255, 0.05);
+        border-radius: 10px;
+        padding: 1rem;
+        border: 1px solid rgba(0, 212, 255, 0.2);
     }
     
     .sidebar-nav {
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(15px);
-        border-radius: 15px;
-        padding: 1rem;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 10px;
+        padding: 0.75rem;
         margin: 0.5rem 0;
         border: 1px solid rgba(255, 255, 255, 0.1);
     }
     
     .chart-container {
-        background: rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(10px);
-        border-radius: 20px;
-        padding: 1rem;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        margin: 1rem 0;
+        background: rgba(255, 255, 255, 0.02);
+        border-radius: 12px;
+        padding: 0.75rem;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        margin: 0.5rem 0;
     }
     
     .status-indicator {
@@ -249,7 +186,6 @@ st.markdown("""
         height: 8px;
         border-radius: 50%;
         margin-right: 8px;
-        animation: pulse 2s infinite;
     }
     
     .status-online { background: #00ff88; }
@@ -264,45 +200,33 @@ st.markdown("""
     .tooltip:hover::after {
         content: attr(data-tooltip);
         position: absolute;
-        background: rgba(0, 0, 0, 0.9);
+        background: rgba(0, 0, 0, 0.8);
         color: white;
-        padding: 0.5rem;
-        border-radius: 5px;
-        font-size: 0.8rem;
+        padding: 0.4rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
         white-space: nowrap;
         z-index: 1000;
-        top: -2rem;
+        top: -1.5rem;
         left: 50%;
         transform: translateX(-50%);
     }
     
-    .particle-bg {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: -1;
-    }
-    
     .breadcrumb {
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(10px);
-        border-radius: 25px;
-        padding: 0.5rem 1rem;
-        margin: 1rem 0;
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 15px;
+        padding: 0.4rem 0.75rem;
+        margin: 0.75rem 0;
+        border: 1px solid rgba(255, 255, 255, 0.15);
     }
     
     .search-bar {
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(20px);
-        border-radius: 25px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        padding: 0.75rem 1.5rem;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        padding: 0.5rem 1rem;
         width: 100%;
-        margin: 1rem 0;
+        margin: 0.75rem 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -661,10 +585,10 @@ class DatabaseManager:
                     st.success("✅ MongoDB Atlas connected successfully!")
                     return
                     
-            except ConnectionFailure:
-                pass
-            except Exception:
-                pass
+            except ConnectionFailure as e:
+                st.error(f"❌ MongoDB Connection Failed: {str(e)}")
+            except Exception as e:
+                st.error(f"❌ MongoDB Error: {str(e)}")
         
         # Fallback to PostgreSQL if available
         if POSTGRESQL_AVAILABLE:
@@ -678,8 +602,12 @@ class DatabaseManager:
             except Exception:
                 pass
         
-        # No database available
-        st.warning("No database connection available. Using in-memory storage only.")
+        # No database available (normal for local file analysis)
+        if os.getenv("DATAVIZ_VERBOSE_DB", "").lower() in ("1", "true", "yes"):
+            st.info(
+                "No database configured. Upload files or use samples; connect MongoDB or "
+                "PostgreSQL (see README) for accounts and dataset history."
+            )
         self.client = None
         self.db = None
         self.db_type = None
@@ -881,10 +809,27 @@ def show_auth_ui():
     st.markdown("""
     <div class="main-header">
         <h1>📊 DataViz Pro</h1>
-        <p>Advanced Analytics Dashboard with AI-Powered Insights</p>
-        <p style="font-size: 0.9rem; opacity: 0.8;">Please login or register to continue</p>
+        <p>Upload CSV or Excel and explore charts, stats, and optional AI insights</p>
+        <p style="font-size: 0.9rem; opacity: 0.8;">Sign in to save history to a database, or continue locally</p>
     </div>
     """, unsafe_allow_html=True)
+
+    if guest_mode_allowed():
+        st.info("**Local file analysis** — no account or database required. Your data stays in this session.")
+        if st.button("Continue as guest", type="primary", use_container_width=True):
+            st.session_state.authenticated = True
+            st.session_state.user = {
+                "user_id": "guest",
+                "email": "",
+                "first_name": "Guest",
+                "last_name": "User",
+                "password_hash": "",
+                "salt": "",
+                "is_active": True,
+            }
+            st.session_state.session_id = None
+            st.rerun()
+        st.markdown("---")
     
     # Authentication tabs
     auth_tab1, auth_tab2 = st.tabs(["🔑 Login", "📝 Register"])
@@ -898,7 +843,7 @@ def show_auth_ui():
             
             col1, col2 = st.columns([1, 2])
             with col1:
-                login_submitted = st.form_submit_button("🚀 Login", use_container_width=True, type="primary")
+                login_submitted = st.form_submit_button("🚀 Login", type="primary")
             
             if login_submitted:
                 if email and password:
@@ -937,7 +882,7 @@ def show_auth_ui():
             # Terms and conditions
             terms_accepted = st.checkbox("I agree to the Terms of Service and Privacy Policy")
             
-            register_submitted = st.form_submit_button("✨ Create Account", use_container_width=True, type="primary")
+            register_submitted = st.form_submit_button("✨ Create Account", type="primary")
             
             if register_submitted:
                 if not all([first_name, last_name, reg_email, reg_password, confirm_password]):
@@ -985,13 +930,51 @@ def show_auth_ui():
 class DataAnalyzer:
     def __init__(self):
         self.df = None
-        self.openai_client = None
-        self.db_manager = DatabaseManager()
-        self.user_manager = UserManager(self.db_manager)
+        self.ai_client = None
+        self.ai_provider = None
+        self._db_manager = None
+        self._user_manager = None
+        self._init_ai_client()
+    
+    @property
+    def db_manager(self):
+        """Lazy initialization of database manager"""
+        if self._db_manager is None:
+            self._db_manager = DatabaseManager()
+        return self._db_manager
+    
+    @property
+    def user_manager(self):
+        """Lazy initialization of user manager"""
+        if self._user_manager is None:
+            self._user_manager = UserManager(self.db_manager)
+        return self._user_manager
+    
+    def _init_ai_client(self):
+        """Initialize AI client with priority: Groq (free) > Hugging Face (free) > OpenAI (paid)"""
+        # Priority 1: Groq (Free, fast, OpenAI-compatible)
+        if GROQ_AVAILABLE:
+            api_key = os.getenv("GROQ_API_KEY")
+            if api_key:
+                self.ai_client = Groq(api_key=api_key)
+                self.ai_provider = "groq"
+                return
+        
+        # Priority 2: Hugging Face Inference API (Free tier available)
+        if HF_AVAILABLE:
+            api_key = os.getenv("HF_API_KEY")
+            if api_key:
+                self.ai_client = api_key  # Store token for requests
+                self.ai_provider = "huggingface"
+                return
+        
+        # Priority 3: OpenAI (Paid - fallback)
         if OPENAI_AVAILABLE:
             api_key = os.getenv("OPENAI_API_KEY")
             if api_key:
-                self.openai_client = OpenAI(api_key=api_key)
+                self.ai_client = OpenAI(api_key=api_key)
+                self.ai_provider = "openai"
+                return
     
     def load_data(self, uploaded_file) -> Optional[pd.DataFrame]:
         """Load and parse uploaded file with error handling"""
@@ -1013,15 +996,28 @@ class DataAnalyzer:
             # Clean column names
             df.columns = df.columns.str.strip().str.replace(' ', '_')
             
-            # Convert date columns
+            # Convert date columns safely
             for col in df.columns:
                 if df[col].dtype == 'object':
                     # Try to convert to datetime
                     try:
-                        df[col] = pd.to_datetime(df[col], errors='ignore')
+                        # Check if column looks like dates (sample first 10 non-null values)
+                        sample = df[col].dropna().head(10)
+                        if len(sample) > 0:
+                            # Try conversion with errors='coerce'
+                            converted = pd.to_datetime(sample, errors='coerce')
+                            # Only convert if most values are valid dates (>50%)
+                            if converted.notna().sum() / len(sample) > 0.5:
+                                df[col] = pd.to_datetime(df[col], errors='coerce')
                     except:
                         pass
             
+            # Streamlit sometimes fails Arrow serialization for mixed object columns
+            # (common with Excel columns like "Unnamed: ..." and mixed types).
+            for col in df.columns:
+                if df[col].dtype == 'object':
+                    df[col] = df[col].map(lambda v: None if pd.isna(v) else str(v))
+
             self.df = df
             return df
             
@@ -1212,9 +1208,9 @@ class DataAnalyzer:
         return insights[:10]  # Limit to top 10 insights
     
     def natural_language_query(self, query: str) -> Dict[str, Any]:
-        """Process natural language queries using OpenAI"""
-        if not self.openai_client or self.df is None:
-            return {"error": "OpenAI not available or no data loaded"}
+        """Process natural language queries using available AI provider (Groq, Hugging Face, or OpenAI)"""
+        if not self.ai_client or self.df is None:
+            return {"error": "No AI provider available. Please set GROQ_API_KEY (free), HF_API_KEY (free), or OPENAI_API_KEY."}
         
         try:
             # Prepare context about the dataset
@@ -1247,9 +1243,76 @@ Respond with JSON in this exact format:
     "insights": "Brief analysis insight"
 }}"""
 
-            # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
-            # do not change this unless explicitly requested by the user
-            response = self.openai_client.chat.completions.create(
+            # Route to appropriate provider
+            if self.ai_provider == "groq":
+                return self._query_groq(system_prompt, query)
+            elif self.ai_provider == "huggingface":
+                return self._query_huggingface(system_prompt, query)
+            elif self.ai_provider == "openai":
+                return self._query_openai(system_prompt, query)
+            else:
+                return {"error": "Unknown AI provider"}
+                
+        except Exception as e:
+            return {"error": f"Failed to process query: {str(e)}"}
+    
+    def _query_groq(self, system_prompt: str, query: str) -> Dict[str, Any]:
+        """Query using Groq API (Free, fast) - groq.com"""
+        try:
+            response = self.ai_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",  # Fast, capable, free tier available
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": query}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.1
+            )
+            result = json.loads(response.choices[0].message.content)
+            result["_provider"] = "groq"  # Track which provider was used
+            return result
+        except Exception as e:
+            return {"error": f"Groq API error: {str(e)}"}
+    
+    def _query_huggingface(self, system_prompt: str, query: str) -> Dict[str, Any]:
+        """Query using Hugging Face Inference API (Free tier available) - huggingface.co"""
+        try:
+            API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
+            headers = {"Authorization": f"Bearer {self.ai_client}"}
+            
+            # Format for instruction-following models
+            payload = {
+                "inputs": f"<s>[INST] {system_prompt}\n\nUser query: {query} [/INST]",
+                "parameters": {
+                    "max_new_tokens": 512,
+                    "temperature": 0.1,
+                    "return_full_text": False
+                }
+            }
+            
+            response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
+            
+            if response.status_code == 200:
+                generated_text = response.json()[0]["generated_text"]
+                # Extract JSON from response
+                import re
+                json_match = re.search(r'\{.*\}', generated_text, re.DOTALL)
+                if json_match:
+                    result = json.loads(json_match.group())
+                    result["_provider"] = "huggingface"
+                    return result
+                else:
+                    return {"error": "Could not parse JSON from Hugging Face response", "raw": generated_text}
+            else:
+                return {"error": f"Hugging Face API error: {response.status_code}"}
+                
+        except Exception as e:
+            return {"error": f"Hugging Face API error: {str(e)}"}
+    
+    def _query_openai(self, system_prompt: str, query: str) -> Dict[str, Any]:
+        """Query using OpenAI API (Paid)"""
+        try:
+            response = self.ai_client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -1257,12 +1320,11 @@ Respond with JSON in this exact format:
                 ],
                 response_format={"type": "json_object"}
             )
-            
             result = json.loads(response.choices[0].message.content)
+            result["_provider"] = "openai"
             return result
-            
         except Exception as e:
-            return {"error": f"Failed to process query: {str(e)}"}
+            return {"error": f"OpenAI API error: {str(e)}"}
 
 # Initialize the analyzer
 @st.cache_resource
@@ -1270,6 +1332,14 @@ def get_analyzer():
     return DataAnalyzer()
 
 analyzer = get_analyzer()
+
+
+@st.cache_data(show_spinner=False)
+def _cached_geocode_osm(query: str) -> tuple:
+    """Cached OSM Nominatim lookup (caller should still throttle batch first-seen keys)."""
+    from data_context import geocode_place
+    return geocode_place(query)
+
 
 # Main application
 def main():
@@ -1279,9 +1349,10 @@ def main():
         st.session_state.user = None
         st.session_state.session_id = None
     
-    # Check for existing session
-    if not st.session_state.authenticated and 'session_id' in st.session_state and st.session_state.session_id:
-        user = analyzer.user_manager.validate_session(st.session_state.session_id)
+    # Check for existing session (signed-in users only)
+    sid = st.session_state.get("session_id")
+    if not st.session_state.authenticated and sid:
+        user = analyzer.user_manager.validate_session(sid)
         if user:
             st.session_state.authenticated = True
             st.session_state.user = user
@@ -1324,42 +1395,41 @@ def main():
         st.markdown(f"""
         <div style="background: rgba(255, 255, 255, 0.1); padding: 1rem; border-radius: 10px; margin-bottom: 1rem;">
             <h4>👤 {st.session_state.user['first_name']} {st.session_state.user['last_name']}</h4>
-            <p style="font-size: 0.8rem; opacity: 0.8;">{st.session_state.user['email']}</p>
+            <p style="font-size: 0.8rem; opacity: 0.8;">{st.session_state.user.get('email') or 'Local session'}</p>
         </div>
         """, unsafe_allow_html=True)
         
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button("🚪 Logout"):
             analyzer.user_manager.logout_user(st.session_state.session_id)
             st.session_state.authenticated = False
             st.session_state.user = None
             st.session_state.session_id = None
             st.rerun()
-        
-        # Database status
-        if analyzer.db_manager.db is not None:
+
+        u = st.session_state.user or {}
+        guest = is_guest_user(u)
+        db = analyzer.db_manager.db
+
+        if guest:
+            st.caption("Local session — data stays in memory unless you connect a database.")
+        elif db is not None:
             st.markdown("""
             <div style="background: rgba(0, 255, 136, 0.1); padding: 0.5rem; border-radius: 8px; margin-bottom: 1rem;">
-                <span class="status-indicator status-online"></span>MongoDB Connected
+                <span class="status-indicator status-online"></span>Database connected
             </div>
             """, unsafe_allow_html=True)
-        elif MONGODB_AVAILABLE:
-            st.markdown("""
-            <div style="background: rgba(255, 136, 0, 0.1); padding: 0.5rem; border-radius: 8px; margin-bottom: 1rem;">
-                <span class="status-indicator status-processing"></span>MongoDB Available (Not Connected)
-            </div>
-            """, unsafe_allow_html=True)
+        elif MONGODB_AVAILABLE or POSTGRESQL_AVAILABLE:
+            st.caption("Database drivers installed — set `MONGODB_URI` or `DATABASE_URL` for saved history and accounts.")
         else:
-            st.markdown("""
-            <div style="background: rgba(255, 0, 0, 0.1); padding: 0.5rem; border-radius: 8px; margin-bottom: 1rem;">
-                <span class="status-indicator status-error"></span>MongoDB Not Available
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # Data source selection
+            st.caption("Optional: install database extras for saved datasets (`pip install -e \".[database]\"`).")
+
+        source_options = ["Upload File", "Sample Dataset"]
+        if db is not None:
+            source_options.append("Database History")
         data_source = st.radio(
             "Choose Data Source:",
-            ["Upload File", "Sample Dataset", "Database History"],
-            help="Upload your own data, use sample datasets, or load from database"
+            source_options,
+            help="Upload files, use samples, or load from your connected database",
         )
         
         df = None
@@ -1376,6 +1446,56 @@ def main():
                     df = analyzer.load_data(uploaded_file)
                     if df is not None:
                         st.success(f"✅ Loaded {len(df)} rows, {len(df.columns)} columns")
+
+                        # Fast-path automated visualizations (recommendations only)
+                        try:
+                            from auto_viz import AutoVizGenerator
+                            if 'auto_viz_recommendations' not in st.session_state:
+                                st.session_state.auto_viz_recommendations = []
+                            gen = AutoVizGenerator()
+                            st.session_state.auto_viz_recommendations = gen.recommend_visualizations(df)[:6]
+                            st.session_state.auto_viz_last_loaded_at = datetime.now().isoformat()
+                        except Exception:
+                            # Don't block dataset loading if auto-viz fails
+                            st.session_state.auto_viz_recommendations = []
+
+                        # Lightweight Auto Analysis (B): anomalies + correlation summary
+                        try:
+                            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()[:6]
+                            anomaly_summary = []
+                            for col in numeric_cols:
+                                if col in df.columns:
+                                    Q1 = df[col].quantile(0.25)
+                                    Q3 = df[col].quantile(0.75)
+                                    IQR = Q3 - Q1
+                                    lower = Q1 - 1.5 * IQR
+                                    upper = Q3 + 1.5 * IQR
+                                    anomalies = df[(df[col] < lower) | (df[col] > upper)].shape[0]
+                                    anomaly_summary.append({"column": col, "anomaly_rows": int(anomalies)})
+
+                            corr_summary = {}
+                            if len(numeric_cols) >= 2:
+                                corr = df[numeric_cols].corr()
+                                # Keep only strongest abs correlations (upper triangle)
+                                pairs = []
+                                cols = corr.columns.tolist()
+                                for i in range(len(cols)):
+                                    for j in range(i + 1, len(cols)):
+                                        pairs.append({"x": cols[i], "y": cols[j], "corr": float(corr.iloc[i, j])})
+                                pairs.sort(key=lambda p: abs(p["corr"]), reverse=True)
+                                corr_summary = {"top_pairs": pairs[:8]}
+
+                            st.session_state.auto_analysis = {
+                                "anomalies": anomaly_summary,
+                                "correlations": corr_summary
+                            }
+                        except Exception:
+                            st.session_state.auto_analysis = {"anomalies": [], "correlations": {}}
+                        try:
+                            from data_context import build_data_digest
+                            st.session_state.data_digest = build_data_digest(df)
+                        except Exception:
+                            st.session_state.data_digest = None
         elif data_source == "Sample Dataset":
             sample_type = st.selectbox(
                 "Select Sample Dataset:",
@@ -1385,14 +1505,34 @@ def main():
             if st.button("Load Sample Data"):
                 with st.spinner("Generating sample data..."):
                     df = analyzer.generate_sample_data(sample_type)
-                    # Save to database
-                    dataset_id = analyzer.db_manager.save_dataset(
-                        name=f"Sample {sample_type}",
-                        description=f"Generated sample dataset for {sample_type.lower()} by {st.session_state.user['first_name']} {st.session_state.user['last_name']}",
-                        file_type="generated",
-                        df=df
-                    )
+                    if analyzer.db_manager.db is not None:
+                        analyzer.db_manager.save_dataset(
+                            name=f"Sample {sample_type}",
+                            description=(
+                                f"Generated sample dataset for {sample_type.lower()} by "
+                                f"{st.session_state.user.get('first_name', '')} {st.session_state.user.get('last_name', '')}"
+                            ),
+                            file_type="generated",
+                            df=df,
+                        )
                     st.success(f"✅ Generated {len(df)} rows, {len(df.columns)} columns")
+
+                    # Fast-path automated visualizations (recommendations only)
+                    try:
+                        from auto_viz import AutoVizGenerator
+                        if 'auto_viz_recommendations' not in st.session_state:
+                            st.session_state.auto_viz_recommendations = []
+                            gen = AutoVizGenerator()
+                            st.session_state.auto_viz_recommendations = gen.recommend_visualizations(df)[:6]
+                            st.session_state.auto_viz_last_loaded_at = datetime.now().isoformat()
+                    except Exception:
+                        # Don't block dataset loading if auto-viz fails
+                        st.session_state.auto_viz_recommendations = []
+                    try:
+                        from data_context import build_data_digest
+                        st.session_state.data_digest = build_data_digest(df)
+                    except Exception:
+                        st.session_state.data_digest = None
         
         elif data_source == "Database History":
             datasets = analyzer.db_manager.get_datasets()
@@ -1522,13 +1662,53 @@ def main():
         df = analyzer.df
         
         # Create tabs for different views
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-            "🔍 Overview", "📊 Visualizations", "🤖 AI Insights", "💬 Natural Language", "🏗️ Dashboard Builder", "🗺️ Geographic Maps", "⚙️ Advanced", "✅ Feature Status"
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = st.tabs([
+            "🔍 Overview", "📊 Visualizations", "🤖 AI Insights", "💬 Natural Language", "🏗️ Dashboard Builder", "🗺️ Geographic Maps", "⚙️ Advanced", "✅ Feature Status",
+            "🔮 Auto Viz", "📈 Forecasting", "🧪 A/B Testing", "🔧 Formula Builder", "📋 Reporting"
         ])
         
         with tab1:
             st.markdown("## 📈 Data Overview")
-            
+
+            digest = st.session_state.get("data_digest")
+            if digest is None or digest.get("shape") != (len(df), len(df.columns)):
+                try:
+                    from data_context import build_data_digest
+                    digest = build_data_digest(df)
+                    st.session_state.data_digest = digest
+                except Exception:
+                    digest = None
+            if digest:
+                st.markdown("### 📌 How to read this file")
+                for b in digest.get("bullets", []):
+                    st.markdown(f"- {b}", unsafe_allow_html=True)
+                roles = digest.get("column_roles", [])
+                if roles:
+                    h = min(420, 100 + 26 * len(roles))
+                    with st.expander("Column roles (auto-detected)", expanded=False):
+                        st.dataframe(
+                            pd.DataFrame(roles),
+                            use_container_width=True,
+                            height=h,
+                        )
+
+            # Lightweight Auto Analysis (B): show right after load
+            auto_analysis = st.session_state.get("auto_analysis")
+            if isinstance(auto_analysis, dict) and (auto_analysis.get("anomalies") or auto_analysis.get("correlations")):
+                st.markdown("### ⚡ Auto Analysis")
+                a = auto_analysis.get("anomalies", [])
+                c = auto_analysis.get("correlations", {})
+
+                if a:
+                    st.write("**Anomaly summary (IQR outliers)**")
+                    st.dataframe(pd.DataFrame(a), use_container_width=True, height=220)
+
+                if c and c.get("top_pairs"):
+                    st.write("**Top correlations**")
+                    top_pairs = c["top_pairs"]
+                    for item in top_pairs[:8]:
+                        st.markdown(f"- {item['x']} vs {item['y']}: {item['corr']:.2f}")
+
             # Key metrics
             col1, col2, col3, col4 = st.columns(4)
             
@@ -1569,7 +1749,7 @@ def main():
             
             # Data preview
             st.markdown("### 📋 Data Preview")
-            st.dataframe(df.head(100), use_container_width=True)
+            st.dataframe(df.head(100), width='stretch')
             
             # Column statistics
             st.markdown("### 📊 Column Statistics")
@@ -1587,7 +1767,7 @@ def main():
                 })
             
             stats_df = pd.DataFrame(stats_data)
-            st.dataframe(stats_df, use_container_width=True)
+            st.dataframe(stats_df, width='stretch')
         
         with tab2:
             st.markdown("## 📊 Interactive Visualizations")
@@ -1939,7 +2119,7 @@ def main():
                         
                         # Show anomalous records
                         st.markdown("### 📋 Anomalous Records")
-                        st.dataframe(df.loc[anomalies], use_container_width=True)
+                        st.dataframe(df.loc[anomalies], width='stretch')
                     else:
                         st.success("No anomalies detected in the selected column.")
             else:
@@ -1948,10 +2128,43 @@ def main():
         with tab4:
             st.markdown("## 💬 Natural Language Queries")
             
-            if not OPENAI_AVAILABLE:
-                st.warning("⚠️ OpenAI integration not available. Install openai package to use this feature.")
-            elif not analyzer.openai_client:
-                st.warning("⚠️ OpenAI API key not found. Set OPENAI_API_KEY environment variable to use this feature.")
+            # Show current AI provider status
+            if analyzer.ai_provider:
+                provider_emoji = {"groq": "⚡", "huggingface": "🤗", "openai": "🤖"}.get(analyzer.ai_provider, "🤖")
+                provider_name = {"groq": "Groq (Free)", "huggingface": "Hugging Face (Free)", "openai": "OpenAI (Paid)"}.get(analyzer.ai_provider, analyzer.ai_provider)
+                st.success(f"{provider_emoji} **AI Provider Active:** {provider_name}")
+            else:
+                st.warning("⚠️ No AI provider configured. See setup options below.")
+            
+            # Setup instructions for free alternatives
+            with st.expander("🔧 AI Provider Setup (Free Options Available)"):
+                st.markdown("""
+                **Free AI Options (Recommended):**
+                
+                **1. Groq (Fastest - Free Tier)** ⭐ Recommended
+                - Sign up at: https://console.groq.com
+                - Get free API credits (generous limits)
+                - Set environment variable: `GROQ_API_KEY=your_key_here`
+                - Install: `pip install groq`
+                - Supports: Llama 3.3 70B, Mixtral 8x7B (very capable models)
+                
+                **2. Hugging Face Inference API (Free Tier)**
+                - Sign up at: https://huggingface.co
+                - Get API token from Settings → Access Tokens
+                - Set environment variable: `HF_API_KEY=your_token_here`
+                - No additional install needed (uses `requests`)
+                - Supports: Mistral 7B, Llama models, and more
+                
+                **3. OpenAI (Paid - Not Recommended for Free Use)**
+                - Set environment variable: `OPENAI_API_KEY=your_key_here`
+                - Install: `pip install openai`
+                - Uses GPT-4o (requires payment)
+                
+                **Priority:** Groq → Hugging Face → OpenAI (auto-detected based on available keys)
+                """)
+            
+            if not analyzer.ai_client:
+                st.info("👆 Configure one of the free AI providers above to enable natural language queries.")
             else:
                 st.markdown("""
                 Ask questions about your data in natural language! Examples:
@@ -1967,7 +2180,7 @@ def main():
                 )
                 
                 if st.button("🔮 Analyze", type="primary") and query:
-                    with st.spinner("Processing your query..."):
+                    with st.spinner(f"Processing with {analyzer.ai_provider.upper()}..."):
                         result = analyzer.natural_language_query(query)
                         
                         if "error" in result:
@@ -1976,6 +2189,11 @@ def main():
                             # Display the AI's interpretation
                             st.markdown("### 🧠 AI Interpretation")
                             st.json(result)
+                            
+                            # Show which provider was used
+                            if "_provider" in result:
+                                provider_display = {"groq": "⚡ Groq", "huggingface": "🤗 Hugging Face", "openai": "🤖 OpenAI"}.get(result["_provider"], result["_provider"])
+                                st.caption(f"Generated by: {provider_display}")
                             
                             # Try to create the suggested visualization
                             try:
@@ -2102,7 +2320,7 @@ def main():
                                         st.plotly_chart(fig, use_container_width=True)
                                 
                                 elif widget['type'] == "Data Table":
-                                    st.dataframe(df.head(5), use_container_width=True)
+                                    st.dataframe(df.head(5), width='stretch')
                                 
                                 elif widget['type'] == "Insight Card":
                                     insights = analyzer.generate_insights()
@@ -2157,33 +2375,62 @@ def main():
         
         with tab6:
             st.markdown("## 🗺️ Geographic Maps")
-            
-            # Check for geographic data
-            potential_lat_cols = [col for col in df.columns if any(term in col.lower() for term in ['lat', 'latitude'])]
-            potential_lon_cols = [col for col in df.columns if any(term in col.lower() for term in ['lon', 'lng', 'longitude'])]
-            potential_location_cols = [col for col in df.columns if any(term in col.lower() for term in ['city', 'state', 'country', 'location', 'address'])]
-            
-            if potential_lat_cols and potential_lon_cols:
-                st.markdown("### 📍 Coordinate-based Maps")
-                
+
+            from data_context import (
+                GEO_DV_LAT,
+                GEO_DV_LON,
+                apply_geocode_columns,
+                build_data_digest,
+                detect_coordinate_columns,
+                detect_location_text_columns,
+            )
+
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            categorical_cols = df.select_dtypes(
+                include=["object", "category", "string"]
+            ).columns.tolist()
+
+            lat_cols, lon_cols = detect_coordinate_columns(df)
+            loc_hint_cols = detect_location_text_columns(df)
+            string_cols = [
+                c
+                for c in df.columns
+                if df[c].dtype in ["object", "category"]
+                or pd.api.types.is_string_dtype(df[c])
+            ]
+
+            if lat_cols and lon_cols:
+                st.markdown("### 📍 Coordinate-based maps")
+
                 col1, col2 = st.columns(2)
                 with col1:
-                    lat_col = st.selectbox("Latitude column:", potential_lat_cols)
-                    lon_col = st.selectbox("Longitude column:", potential_lon_cols)
-                
+                    lat_col = st.selectbox("Latitude column:", lat_cols)
+                    lon_col = st.selectbox("Longitude column:", lon_cols)
+
                 with col2:
-                    map_style = st.selectbox("Map Style:", ["open-street-map", "carto-positron", "carto-darkmatter", "satellite"])
+                    map_style = st.selectbox(
+                        "Map style:",
+                        [
+                            "open-street-map",
+                            "carto-positron",
+                            "carto-darkmatter",
+                            "satellite",
+                        ],
+                    )
                     size_col = st.selectbox("Size by:", [None] + numeric_cols)
-                    color_col = st.selectbox("Color by:", [None] + numeric_cols + categorical_cols)
-                
-                if st.button("🗺️ Generate Map"):
-                    # Filter out invalid coordinates
+                    color_col = st.selectbox(
+                        "Color by:", [None] + numeric_cols + categorical_cols
+                    )
+
+                if st.button("🗺️ Generate map", key="geo_gen_map"):
                     map_data = df.dropna(subset=[lat_col, lon_col])
                     map_data = map_data[
-                        (map_data[lat_col] >= -90) & (map_data[lat_col] <= 90) &
-                        (map_data[lon_col] >= -180) & (map_data[lon_col] <= 180)
+                        (map_data[lat_col] >= -90)
+                        & (map_data[lat_col] <= 90)
+                        & (map_data[lon_col] >= -180)
+                        & (map_data[lon_col] <= 180)
                     ]
-                    
+
                     if len(map_data) > 0:
                         fig = px.scatter_mapbox(
                             map_data,
@@ -2191,63 +2438,191 @@ def main():
                             lon=lon_col,
                             color=color_col,
                             size=size_col,
-                            hover_data=df.columns.tolist()[:5],  # Show first 5 columns on hover
+                            hover_data=df.columns.tolist()[:8],
                             mapbox_style=map_style,
                             height=600,
-                            zoom=3
+                            zoom=3,
                         )
                         fig.update_layout(template="plotly_dark")
                         st.plotly_chart(fig, use_container_width=True)
-                        
-                        st.success(f"Plotted {len(map_data)} points on the map!")
+                        st.success(f"Plotted **{len(map_data)}** points.")
                     else:
-                        st.warning("No valid coordinate data found.")
-            
-            elif potential_location_cols:
-                st.markdown("### 🏙️ Location-based Maps")
-                st.info("Geographic mapping requires coordinate data (latitude/longitude). Consider geocoding your location data.")
-                
-                location_col = st.selectbox("Location column:", potential_location_cols)
-                st.markdown(f"**Sample locations from {location_col}:**")
-                sample_locations = df[location_col].dropna().unique()[:10]
-                for loc in sample_locations:
-                    st.write(f"• {loc}")
-                
-                st.markdown("""
-                **To create geographic maps:**
-                1. Add latitude and longitude columns to your data
-                2. Use a geocoding service to convert addresses to coordinates
-                3. Ensure coordinate columns contain valid numeric values
-                """)
-            
+                        st.warning("No valid coordinate rows after filtering.")
+
             else:
-                st.markdown("### 📍 No Geographic Data Detected")
-                st.info("""
-                To create geographic visualizations, your data should include:
-                
-                **Option 1: Coordinate Data**
-                - Latitude column (e.g., 'lat', 'latitude')
-                - Longitude column (e.g., 'lon', 'lng', 'longitude')
-                
-                **Option 2: Location Data**
-                - City, state, or country columns
-                - Address information
-                
-                You can add sample geographic data or upload a dataset with location information.
-                """)
-                
-                if st.button("📍 Generate Sample Geographic Data"):
-                    # Create sample data with coordinates
+                st.markdown("### 🌍 Maps from city / address columns")
+                st.caption(
+                    "Geocoding uses OpenStreetMap **Nominatim** (via `geopy`). "
+                    "Use a modest number of distinct places and ~1 second between lookups."
+                )
+
+                if loc_hint_cols:
+                    st.success(
+                        "Detected possible place columns: **"
+                        + "**, **".join(loc_hint_cols[:10])
+                        + ("** …" if len(loc_hint_cols) > 10 else "**")
+                    )
+
+                place_candidates = list(dict.fromkeys(loc_hint_cols + string_cols))
+                if not place_candidates:
+                    st.warning(
+                        "No text columns found to geocode. Add a column with city, region, or address text, "
+                        "or use the sample dataset below."
+                    )
+                else:
+                    place_col = st.selectbox("Column to geocode", place_candidates)
+                    ctx_choices = [c for c in string_cols if c != place_col]
+                    context_pick = st.selectbox(
+                        "Optional context column (e.g. State), appended to each query",
+                        ["(none)"] + ctx_choices,
+                    )
+                    append_usa = st.checkbox(
+                        'Append ", USA" for disambiguation', value=True
+                    )
+                    max_unique = st.slider(
+                        "Max distinct place values to geocode", 10, 200, 60
+                    )
+
+                    sample_vals = (
+                        df[place_col]
+                        .dropna()
+                        .astype(str)
+                        .str.strip()
+                    )
+                    sample_vals = sample_vals[sample_vals != ""].unique()[:10]
+                    st.markdown(f"**Sample values in `{place_col}`:**")
+                    for v in sample_vals:
+                        st.write(f"• {v}")
+
+                    try:
+                        import geopy  # noqa: F401
+                    except ImportError:
+                        geopy = None
+                    if geopy is None:
+                        st.error("Install **geopy** to enable geocoding: `pip install geopy`")
+                    elif st.button(
+                        "🌍 Geocode → add dv_latitude / dv_longitude columns",
+                        type="primary",
+                        key="geo_run_geocode",
+                    ):
+                        ser = df[place_col].dropna().astype(str).str.strip()
+                        ser = ser[ser != ""]
+                        uniq = pd.unique(ser.values)
+                        if len(uniq) > max_unique:
+                            st.warning(
+                                f"Using first **{max_unique}** distinct values (of {len(uniq)})."
+                            )
+                            uniq = uniq[:max_unique]
+
+                        ctx_col = None if context_pick == "(none)" else context_pick
+                        mapping = {}
+                        bar = st.progress(0.0, text="Geocoding…")
+                        n = len(uniq)
+                        for i, key in enumerate(uniq):
+                            key_s = str(key).strip()
+                            ctx_val = ""
+                            if ctx_col is not None and ctx_col in df.columns:
+                                idx = df.index[df[place_col].astype(str).str.strip() == key_s]
+                                if len(idx) > 0:
+                                    raw = df.loc[idx[0], ctx_col]
+                                    ctx_val = "" if pd.isna(raw) else str(raw).strip()
+                            q = key_s
+                            if ctx_val:
+                                q = f"{q}, {ctx_val}"
+                            if append_usa and ", usa" not in q.lower():
+                                q = f"{q}, USA"
+                            if i > 0:
+                                time.sleep(1.05)
+                            mapping[key_s] = _cached_geocode_osm(q)
+                            bar.progress((i + 1) / max(n, 1))
+
+                        geo_df = apply_geocode_columns(df, place_col, mapping)
+                        n_ok = int(geo_df[[GEO_DV_LAT, GEO_DV_LON]].notna().all(axis=1).sum())
+                        analyzer.df = geo_df
+                        bar.progress(1.0, text="Done")
+                        try:
+                            st.session_state.data_digest = build_data_digest(geo_df)
+                        except Exception:
+                            pass
+                        st.success(
+                            f"Added **{GEO_DV_LAT}** / **{GEO_DV_LON}** — **{n_ok}** rows resolved. "
+                            "Use **Generate map** above on the next run."
+                        )
+                        st.rerun()
+
+                st.markdown("---")
+                st.markdown("### 📍 Or load a small demo with coordinates")
+                st.caption("Replaces the current in-memory table with US cities + lat/lon.")
+                if st.button("📍 Load sample cities (demo)", key="geo_sample_cities"):
                     cities_data = {
-                        'City': ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia', 'San Antonio', 'San Diego', 'Dallas', 'San Jose'],
-                        'Latitude': [40.7128, 34.0522, 41.8781, 29.7604, 33.4484, 39.9526, 29.4241, 32.7157, 32.7767, 37.3382],
-                        'Longitude': [-74.0060, -118.2437, -87.6298, -95.3698, -112.0740, -75.1652, -98.4936, -117.1611, -96.7970, -121.8863],
-                        'Population': [8398748, 3990456, 2705994, 2320268, 1680992, 1584064, 1547253, 1423851, 1343573, 1021795],
-                        'State': ['NY', 'CA', 'IL', 'TX', 'AZ', 'PA', 'TX', 'CA', 'TX', 'CA']
+                        "City": [
+                            "New York",
+                            "Los Angeles",
+                            "Chicago",
+                            "Houston",
+                            "Phoenix",
+                            "Philadelphia",
+                            "San Antonio",
+                            "San Diego",
+                            "Dallas",
+                            "San Jose",
+                        ],
+                        "Latitude": [
+                            40.7128,
+                            34.0522,
+                            41.8781,
+                            29.7604,
+                            33.4484,
+                            39.9526,
+                            29.4241,
+                            32.7157,
+                            32.7767,
+                            37.3382,
+                        ],
+                        "Longitude": [
+                            -74.0060,
+                            -118.2437,
+                            -87.6298,
+                            -95.3698,
+                            -112.0740,
+                            -75.1652,
+                            -98.4936,
+                            -117.1611,
+                            -96.7970,
+                            -121.8863,
+                        ],
+                        "Population": [
+                            8398748,
+                            3990456,
+                            2705994,
+                            2320268,
+                            1680992,
+                            1584064,
+                            1547253,
+                            1423851,
+                            1343573,
+                            1021795,
+                        ],
+                        "State": [
+                            "NY",
+                            "CA",
+                            "IL",
+                            "TX",
+                            "AZ",
+                            "PA",
+                            "TX",
+                            "CA",
+                            "TX",
+                            "CA",
+                        ],
                     }
                     geo_df = pd.DataFrame(cities_data)
                     analyzer.df = geo_df
-                    st.success("Sample geographic data generated! Check the Overview tab to see the new data.")
+                    try:
+                        st.session_state.data_digest = build_data_digest(geo_df)
+                    except Exception:
+                        pass
+                    st.success("Sample geographic data loaded. Open this tab again to plot the map.")
                     st.rerun()
         
         with tab7:
@@ -2283,7 +2658,7 @@ def main():
             
             if len(filtered_df) != len(df):
                 st.success(f"Filtered data: {len(filtered_df):,} rows (from {len(df):,})")
-                st.dataframe(filtered_df.head(100), use_container_width=True)
+                st.dataframe(filtered_df.head(100), width='stretch')
             
             # Statistical summary
             st.markdown("### 📈 Statistical Summary")
@@ -2294,7 +2669,7 @@ def main():
             
             if len(numeric_cols) > 0:
                 summary_stats = filtered_df[numeric_cols].describe()
-                st.dataframe(summary_stats, use_container_width=True)
+                st.dataframe(summary_stats, width='stretch')
                 
                 # Correlation matrix
                 if len(numeric_cols) > 1:
@@ -2386,7 +2761,7 @@ def main():
             # AI & Smart Features
             st.markdown("### 🤖 AI & Smart Features")
             ai_features = [
-                ("✅", "Natural Language Queries", "OpenAI GPT-4o integration for plain English queries"),
+                ("✅", "Natural Language Queries", "Multi-provider support: Groq (Free), Hugging Face (Free), OpenAI (Paid)"),
                 ("✅", "Automatic Anomaly Detection", "IQR-based outlier detection"),
                 ("✅", "Trend Analysis", "Correlation discovery and pattern recognition"),
                 ("✅", "AI-Powered Insights", "Automated insight generation"),
@@ -2419,8 +2794,8 @@ def main():
             st.markdown("### ⚡ Technical Architecture")
             tech_features = [
                 ("✅", "Single-File Architecture", "Lightweight, self-contained deployment"),
-                ("✅", "Database Integration", "PostgreSQL with SQLAlchemy ORM"),
-                ("✅", "API Integration", "OpenAI GPT-4o for AI capabilities"),
+                ("✅", "Database Integration", "MongoDB Atlas + PostgreSQL support"),
+                ("✅", "Multi-Provider AI", "Groq (Free) | Hugging Face (Free) | OpenAI (Paid)"),
                 ("✅", "Environment Configuration", "Secure secret management"),
                 ("✅", "Modern CSS/JS", "Glassmorphism, animations, particle effects"),
                 ("✅", "Error Recovery", "Graceful failure handling"),
@@ -2457,6 +2832,448 @@ def main():
                 with col4:
                     memory_mb = analyzer.df.memory_usage(deep=True).sum() / (1024**2)
                     st.metric("Memory Usage", f"{memory_mb:.1f} MB")
+        
+        with tab9:
+            st.markdown("## 🔮 Automated Visualizations")
+            
+            st.info("📌 Automatic visualizations are generated when you upload a file. View them here!")
+            
+            try:
+                from auto_viz import AutoVizGenerator
+                
+                gen = AutoVizGenerator()
+                
+                # Analyze and recommend
+                st.markdown("### 📊 Dataset Analysis")
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Total Records", f"{len(df):,}")
+                with col2:
+                    st.metric("Numeric Columns", len(df.select_dtypes(include=[np.number]).columns))
+                with col3:
+                    st.metric("Categorical Columns", len(df.select_dtypes(include=['object']).columns))
+                
+                # Generate recommendations
+                recommendations = gen.recommend_visualizations(df)
+                
+                st.markdown("### 💡 Recommended Visualizations")
+                cols_for_recommendations = st.columns(min(3, len(recommendations)))
+                
+                for i, rec in enumerate(recommendations[:6]):
+                    with cols_for_recommendations[i % 3]:
+                        st.write(f"**{rec.get('type').upper()}**")
+                        st.write(f"_{rec.get('title')}_")
+                        st.write(f"🎯 {rec.get('reason')}")
+                
+                # Generate all visualizations
+                if st.button("🎨 Generate All Visualizations", type="primary"):
+                    with st.spinner("Generating visualizations..."):
+                        result = gen.batch_generate(df, limit=6)
+                        
+                        if result.get('success'):
+                            st.success(f"Generated {result.get('total_generated')} visualizations!")
+                            
+                            for viz in result.get('visualizations', []):
+                                st.markdown(f"### {viz.get('title')}")
+                                st.markdown(f"**Type:** {viz.get('type')} | **Priority:** {viz.get('priority')}")
+                                st.markdown(f"_{viz.get('reason')}_")
+                                
+                                if viz.get('insights'):
+                                    st.markdown(f"💡 **Insights:** {', '.join(viz.get('insights'))}")
+                                
+                                st.components.v1.html(viz.get('html'), height=500)
+                        else:
+                            st.error(f"Error: {result.get('error')}")
+                            
+            except ImportError as e:
+                st.error(f"Auto Visualization module not available: {str(e)}")
+        
+        with tab10:
+            st.markdown("## 📈 Advanced Forecasting")
+            
+            try:
+                from forecasting_engine import ForecastingEngine
+                
+                engine = ForecastingEngine()
+                
+                numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+                datetime_cols = df.select_dtypes(include=['datetime64']).columns.tolist()
+                
+                if not datetime_cols:
+                    st.warning("⚠️ No datetime columns found. Forecasting requires time series data.")
+                elif not numeric_cols:
+                    st.error("❌ No numeric columns for forecasting.")
+                else:
+                    st.markdown("### 🔮 Time Series Forecasting")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        date_col = st.selectbox("Select Date Column:", datetime_cols)
+                    with col2:
+                        value_col = st.selectbox("Select Value Column:", numeric_cols)
+                    with col3:
+                        forecast_periods = st.number_input("Forecast Periods:", min_value=1, max_value=365, value=30)
+                    
+                    model_type = st.radio("Select Forecasting Model:", ["ARIMA", "Prophet", "Exponential Smoothing"], horizontal=True)
+
+                    if model_type == "Prophet":
+                        from forecasting_engine import PROPHET_AVAILABLE
+                        if not PROPHET_AVAILABLE:
+                            st.warning(
+                                "Prophet is not installed (keeps the default install light). "
+                                "Install with: `pip install -e \".[forecasting]\"` — or use ARIMA / Exponential Smoothing."
+                            )
+                    
+                    if st.button("🚀 Generate Forecast", type="primary"):
+                        with st.spinner("Training model..."):
+                            # Prepare time series
+                            ts_df = engine.prepare_timeseries(df, date_col, value_col)
+                            
+                            if ts_df is not None:
+                                if model_type == "ARIMA":
+                                    result = engine.forecast_arima(ts_df[value_col], periods=forecast_periods)
+                                elif model_type == "Prophet":
+                                    result = engine.forecast_prophet(df, date_col, value_col, forecast_periods)
+                                else:
+                                    result = engine.forecast_exponential_smoothing(ts_df[value_col], periods=forecast_periods)
+                                
+                                if result.get('success'):
+                                    st.success("✅ Forecast Generated!")
+                                    
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.markdown("### 📊 Model Summary")
+                                        summary = result.get('summary', {})
+                                        for key, value in summary.items():
+                                            st.write(f"**{key.upper()}:** {value}")
+                                    
+                                    with col2:
+                                        st.markdown("### 🎯 Forecast Statistics")
+                                        st.json(result.get('summary', {}))
+                                    
+                                    st.markdown("### 📈 Forecast Data (Partial)")
+                                    forecast_data = result.get('forecast', {})
+                                    if forecast_data:
+                                        st.json({k: v for k, v in list(forecast_data.items())[:5]})
+                                else:
+                                    st.error(f"Forecast Error: {result.get('error')}")
+                            
+            except ImportError as e:
+                st.error(f"Forecasting module not available: {str(e)}")
+        
+        with tab11:
+            st.markdown("## 🧪 A/B Testing & Experimentation")
+            
+            try:
+                from ab_testing import ABTestingFramework
+                
+                framework = ABTestingFramework()
+                
+                numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+                categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+                
+                if not numeric_cols or not categorical_cols:
+                    st.warning("⚠️ A/B Testing requires both numeric and categorical columns.")
+                else:
+                    st.markdown("### 🧪 Create A/B Test")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        test_name = st.text_input("Test Name:", value="experiment_1")
+                    with col2:
+                        metric_col = st.selectbox("Metric Column:", numeric_cols)
+                    with col3:
+                        group_col = st.selectbox("Group Column:", categorical_cols)
+                    
+                    hypothesis = st.text_area("Hypothesis:", placeholder="Enter your test hypothesis...")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        alpha = st.slider("Significance Level (α):", 0.01, 0.10, 0.05)
+                    with col2:
+                        test_type = st.radio("Test Type:", ["T-Test", "Mann-Whitney U", "Chi-Square"], horizontal=True)
+                    
+                    if st.button("📊 Run A/B Test", type="primary"):
+                        with st.spinner("Analyzing data..."):
+                            # Get variants
+                            unique_groups = df[group_col].unique()[:2]  # Get first 2 groups
+                            
+                            if len(unique_groups) >= 2:
+                                variant_a = df[df[group_col] == unique_groups[0]][metric_col].dropna()
+                                variant_b = df[df[group_col] == unique_groups[1]][metric_col].dropna()
+                                
+                                # Create experiment
+                                exp_result = framework.create_experiment(
+                                    test_name, variant_a, variant_b, metric_col, 
+                                    hypothesis=hypothesis
+                                )
+                                
+                                if exp_result.get('success'):
+                                    # Run test
+                                    if test_type == "T-Test":
+                                        test_result = framework.t_test_analysis(test_name, alpha=alpha)
+                                    elif test_type == "Mann-Whitney U":
+                                        test_result = framework.mann_whitney_test(test_name, alpha=alpha)
+                                    else:
+                                        st.info("Chi-Square test requires contingency table setup")
+                                        test_result = {"success": False}
+                                    
+                                    if test_result.get('success'):
+                                        # Display results
+                                        st.markdown("### 📊 Test Results")
+                                        
+                                        col1, col2, col3, col4 = st.columns(4)
+                                        with col1:
+                                            st.metric("P-Value", f"{test_result.get('p_value', 0):.4f}")
+                                        with col2:
+                                            is_sig = "✅ YES" if test_result.get('is_significant') else "❌ NO"
+                                            st.metric("Significant?", is_sig)
+                                        with col3:
+                                            st.metric("Mean A", f"{variant_a.mean():.2f}")
+                                        with col4:
+                                            st.metric("Mean B", f"{variant_b.mean():.2f}")
+                                        
+                                        st.markdown(f"**Recommendation:** {test_result.get('recommendation')}")
+                                        
+                                        if 'cohens_d' in test_result:
+                                            st.markdown(f"**Effect Size (Cohen's d):** {test_result.get('cohens_d'):.3f} ({test_result.get('effect_size_interpretation')})")
+                            else:
+                                st.error("Need at least 2 distinct groups for A/B testing")
+                    
+                    # Calculate sample size
+                    st.markdown("### 📐 Sample Size Calculator")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        baseline = st.slider("Baseline Conversion Rate:", 0.01, 0.50, 0.25)
+                    with col2:
+                        min_effect = st.slider("Minimum Effect Size:", 0.01, 0.30, 0.05)
+                    with col3:
+                        power = st.slider("Statistical Power:", 0.70, 0.99, 0.80)
+                    
+                    if st.button("Calculate Sample Size"):
+                        sample_result = framework.calculate_sample_size(baseline, min_effect, 0.05, power)
+                        
+                        if sample_result.get('success'):
+                            st.success(sample_result.get('note'))
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.metric("Per Variant", f"{sample_result.get('sample_size_per_variant'):,}")
+                            with col2:
+                                st.metric("Total Sample", f"{sample_result.get('total_sample_size'):,}")
+                            
+            except ImportError as e:
+                st.error(f"A/B Testing module not available: {str(e)}")
+        
+        with tab12:
+            st.markdown("## 🔧 Custom Formula Builder")
+            
+            try:
+                from formula_builder import FormulaBuilder
+                
+                builder = FormulaBuilder(df)
+                
+                st.markdown("### 📝 Create Custom Formulas")
+                st.info("Create new columns using formulas. Supports arithmetic, conditional, string, and aggregation operations.")
+                
+                formula_type = st.selectbox(
+                    "Formula Type:",
+                    ["Arithmetic", "Conditional (IF/THEN)", "String Manipulation", "Aggregation"]
+                )
+                
+                if formula_type == "Arithmetic":
+                    st.markdown("**Example:** `[column1] * [column2] + 100`")
+                    formula_name = st.text_input("Formula Name:")
+                    formula = st.text_input("Formula Expression:")
+                    description = st.text_area("Description:")
+                    
+                    if st.button("✅ Create Arithmetic Formula"):
+                        result = builder.create_arithmetic_formula(formula_name, formula, description)
+                        if result.get('success'):
+                            st.success(result.get('message'))
+                            st.write("Sample values:", result.get('sample_values'))
+                        else:
+                            st.error(f"Error: {result.get('error')}")
+                
+                elif formula_type == "Conditional (IF/THEN)":
+                    st.markdown("Create conditions that return different values")
+                    formula_name = st.text_input("Formula Name:")
+                    
+                    num_conditions = st.number_input("Number of conditions:", min_value=1, max_value=5, value=2)
+                    conditions = []
+                    
+                    for i in range(num_conditions):
+                        st.markdown(f"**Condition {i+1}**")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            condition = st.text_input(f"Condition {i+1}:", key=f"cond_{i}")
+                        with col2:
+                            value = st.text_input(f"Then Value {i+1}:", key=f"val_{i}")
+                        conditions.append({"condition": condition, "value": value})
+                    
+                    if st.button("✅ Create Conditional Formula"):
+                        result = builder.create_conditional_formula(formula_name, conditions)
+                        if result.get('success'):
+                            st.success(result.get('message'))
+                        else:
+                            st.error(f"Error: {result.get('error')}")
+                
+                elif formula_type == "String Manipulation":
+                    st.markdown("**Example:** `[column1].upper() + ' - ' + [column2]`")
+                    formula_name = st.text_input("Formula Name:")
+                    formula = st.text_input("Formula Expression:")
+                    description = st.text_area("Description:")
+                    
+                    if st.button("✅ Create String Formula"):
+                        result = builder.create_string_formula(formula_name, formula, description)
+                        if result.get('success'):
+                            st.success(result.get('message'))
+                        else:
+                            st.error(f"Error: {result.get('error')}")
+                
+                else:  # Aggregation
+                    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+                    categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+                    
+                    formula_name = st.text_input("Formula Name:")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        agg_column = st.selectbox("Column to Aggregate:", numeric_cols) if numeric_cols else None
+                    with col2:
+                        agg_type = st.selectbox("Aggregation:", ["sum", "mean", "count", "max", "min", "std"])
+                    with col3:
+                        group_by = st.selectbox("Group By:", [None] + categorical_cols) if categorical_cols else None
+                    
+                    if st.button("✅ Create Aggregation Formula"):
+                        result = builder.create_aggregation_formula(formula_name, agg_column, agg_type, group_by)
+                        if result.get('success'):
+                            st.success(result.get('message'))
+                            st.write("Result:", result.get('result'))
+                        else:
+                            st.error(f"Error: {result.get('error')}")
+                
+                # List existing formulas
+                st.markdown("### 📋 Existing Formulas")
+                formulas = builder.list_formulas()
+                
+                if formulas:
+                    for formula in formulas:
+                        st.markdown(f"**{formula.get('name')}** ({formula.get('type')})")
+                        if formula.get('description'):
+                            st.write(formula.get('description'))
+                else:
+                    st.info("No formulas created yet")
+                    
+            except ImportError as e:
+                st.error(f"Formula Builder module not available: {str(e)}")
+        
+        with tab13:
+            st.markdown("## 📋 Report Scheduling & Export")
+            
+            try:
+                from report_scheduler import ReportScheduler
+                
+                scheduler = ReportScheduler()
+                
+                st.markdown("### 📅 Schedule Automated Reports")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("#### Create New Schedule")
+                    schedule_name = st.text_input("Schedule Name:")
+                    frequency = st.selectbox("Frequency:", ["daily", "weekly", "monthly"])
+                    time = st.time_input("Execution Time:").strftime("%H:%M")
+                    report_format = st.selectbox("Report Format:", ["html", "csv", "json"])
+                    
+                    if st.button("📅 Create Schedule"):
+                        result = scheduler.create_schedule(schedule_name, {
+                            "name": schedule_name,
+                            "frequency": frequency,
+                            "time": time,
+                            "report_format": report_format,
+                            "output_path": f"reports/{schedule_name}_{datetime.now().strftime('%Y%m%d')}.{report_format}"
+                        })
+                        
+                        if result.get('success'):
+                            st.success(result.get('message'))
+                            st.write(f"Next run: {result.get('next_run')}")
+                        else:
+                            st.error(f"Error: {result.get('error')}")
+                
+                with col2:
+                    st.markdown("#### Scheduler Status")
+                    status = scheduler.get_scheduler_status()
+                    
+                    col_a, col_b, col_c = st.columns(3)
+                    with col_a:
+                        st.metric("Total Schedules", status.get('total_schedules'))
+                    with col_b:
+                        st.metric("Active", status.get('active_schedules'))
+                    with col_c:
+                        st.metric("Reports Run", status.get('total_reports_run'))
+                
+                # List schedules
+                st.markdown("#### Scheduled Reports")
+                schedules = scheduler.list_schedules()
+                
+                if schedules:
+                    for sched in schedules:
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.write(f"📅 **{sched.get('name')}** - {sched.get('frequency')} @ {sched.get('frequency')}")
+                        with col2:
+                            if st.button("▶️ Run Now", key=f"run_{sched.get('id')}"):
+                                result = scheduler.run_report(sched.get('id'), df)
+                                if result.get('success'):
+                                    st.success(f"Report saved to: {result.get('output_path')}")
+                                else:
+                                    st.error(result.get('error'))
+                
+                # Export current dataset
+                st.markdown("### 💾 Export Current Dataset")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    if st.button("📊 Export as HTML Report"):
+                        from report_scheduler import HTMLReportGenerator
+                        gen = HTMLReportGenerator()
+                        html_content = gen.generate(df, {
+                            "title": "Data Report",
+                            "include_summary": True,
+                            "include_stats": True
+                        })
+                        st.download_button(
+                            label="Download HTML Report",
+                            data=html_content,
+                            file_name=f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
+                            mime="text/html"
+                        )
+                
+                with col2:
+                    if st.button("📈 Export as CSV"):
+                        csv_data = df.to_csv(index=False)
+                        st.download_button(
+                            label="Download CSV",
+                            data=csv_data,
+                            file_name=f"data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv"
+                        )
+                
+                with col3:
+                    if st.button("📋 Export as JSON"):
+                        json_data = df.to_json(orient='records')
+                        st.download_button(
+                            label="Download JSON",
+                            data=json_data,
+                            file_name=f"data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                            mime="application/json"
+                        )
+                    
+            except ImportError as e:
+                st.error(f"Report Scheduler module not available: {str(e)}")
     
     else:
         # Welcome screen with sample data options
@@ -2473,22 +3290,22 @@ def main():
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            if st.button("📈 Sales Analytics", use_container_width=True):
+            if st.button("📈 Sales Analytics"):
                 analyzer.generate_sample_data("Sales Data")
                 st.rerun()
         
         with col2:
-            if st.button("👥 Customer Data", use_container_width=True):
+            if st.button("👥 Customer Data"):
                 analyzer.generate_sample_data("Customer Analytics")
                 st.rerun()
         
         with col3:
-            if st.button("💰 Financial Data", use_container_width=True):
+            if st.button("💰 Financial Data"):
                 analyzer.generate_sample_data("Financial Data")
                 st.rerun()
         
         with col4:
-            if st.button("🌐 Web Analytics", use_container_width=True):
+            if st.button("🌐 Web Analytics"):
                 analyzer.generate_sample_data("Website Analytics")
                 st.rerun()
         
@@ -2503,7 +3320,7 @@ def main():
                 </div>
                 <div class="insight-card">
                     <h4>💬 Natural Language Queries</h4>
-                    <p>Ask questions in plain English and get instant visualizations with OpenAI integration</p>
+                    <p>Ask questions in plain English! Supports Groq (Free), Hugging Face (Free), and OpenAI</p>
                 </div>
                 <div class="insight-card">
                     <h4>📊 Advanced Visualizations</h4>
@@ -2536,50 +3353,6 @@ def main():
         <div class="floating-action" onclick="window.scrollTo({top: 0, behavior: 'smooth'})" title="Back to Top">
             ↑
         </div>
-        
-        <!-- Background particles effect -->
-        <div class="particle-bg">
-            <canvas id="particles" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1;"></canvas>
-        </div>
-        
-        <script>
-        // Simple particle effect
-        if (document.getElementById('particles')) {
-            const canvas = document.getElementById('particles');
-            const ctx = canvas.getContext('2d');
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            
-            const particles = [];
-            for (let i = 0; i < 50; i++) {
-                particles.push({
-                    x: Math.random() * canvas.width,
-                    y: Math.random() * canvas.height,
-                    vx: (Math.random() - 0.5) * 0.5,
-                    vy: (Math.random() - 0.5) * 0.5,
-                    size: Math.random() * 2 + 1,
-                    opacity: Math.random() * 0.5 + 0.1
-                });
-            }
-            
-            function animate() {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                particles.forEach(p => {
-                    p.x += p.vx;
-                    p.y += p.vy;
-                    if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
-                    if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
-                    
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                    ctx.fillStyle = `rgba(0, 212, 255, ${p.opacity})`;
-                    ctx.fill();
-                });
-                requestAnimationFrame(animate);
-            }
-            animate();
-        }
-        </script>
         """, unsafe_allow_html=True)
 
 if __name__ == "__main__":

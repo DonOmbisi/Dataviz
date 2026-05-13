@@ -3,18 +3,23 @@
 showWarningOnDirectExecution = false
 
 [server]
-# Server settings
+# Server settings - Optimized for performance
 headless = true
 address = "0.0.0.0"
-port = 5000
+port = 8501
 baseUrlPath = ""
 enableCORS = false
-enableXsrfProtection = true
-maxUploadSize = 200
+enableXsrfProtection = false  # Disable for faster local development
+maxUploadSize = 100           # Reduced from 200MB for faster uploads
+maxMessageSize = 100          # Limit WebSocket message size
 
-# Auto-reload settings
-runOnSave = true
-allowRunOnSave = true
+# Performance optimizations
+enableStaticServing = false   # Disabled - no static folder present
+fileWatcherType = "none"      # Disable file watching for better performance
+
+# Auto-reload settings (disable in production)
+runOnSave = false             # Disable auto-reload for stability
+allowRunOnSave = false
 
 [browser]
 # Browser settings
@@ -28,6 +33,11 @@ backgroundColor = "#0e1117"
 secondaryBackgroundColor = "#262730"
 textColor = "#fafafa"
 font = "sans serif"
+
+[runner]
+# Script execution optimizations
+fastReruns = false        # Disable for stability, enable if needed
+enforceSerializableSessionState = false  # Allow complex objects for speed
 
 [mapbox]
 # Mapbox token (if using mapbox maps)

@@ -1,30 +1,19 @@
-
-# DataViz Pro Requirements
-# Install with: pip install -r requirements.txt
-
-# Core framework
+# Core: file upload + charts + stats (lightweight default)
 streamlit>=1.45.1
-
-# Data processing
 pandas>=2.3.0
 numpy>=2.3.0
 openpyxl>=3.1.5
-
-# Visualization
 plotly>=6.1.2
-
-# Machine learning and analytics
+kaleido>=0.2.1
 scikit-learn>=1.7.0
 scipy>=1.15.3
-
-# Database connections
-pymongo>=4.6.0
-dnspython>=2.0.0
-psycopg2-binary>=2.9.0
-
-# AI integration
-openai>=1.88.0
-
-# Additional utilities (optional but recommended)
+statsmodels>=0.14.0
 python-dotenv>=1.0.0
+requests>=2.31.0
+geopy>=2.4.0
+openai>=1.88.0
+groq>=0.9.0
 watchdog>=3.0.0
+
+# Full stack (DB, Prophet, REST API, scheduled reports): see requirements-all.txt
+# Or: pip install -e ".[all]"

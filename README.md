@@ -41,14 +41,26 @@ cd dataviz-pro
 
 ### 2. Install Dependencies
 
+**Lightweight (recommended for CSV/Excel analysis only):**
+
 ```bash
-# Install all required packages
-pip install streamlit pandas numpy plotly pymongo dnspython openpyxl scikit-learn scipy openai psycopg2-binary
+pip install -r requirements.txt
+```
+
+**Full stack** (MongoDB/Postgres, Prophet, FastAPI sidecar, scheduled reports):
+
+```bash
+pip install -r requirements-all.txt
 ```
 
 **Or using the project file:**
+
 ```bash
-pip install -e .
+pip install -e .                    # core only
+pip install -e ".[all]"           # optional features
+pip install -e ".[database]"      # MongoDB + Postgres drivers only
+pip install -e ".[forecasting]"   # Prophet (heavy) for Prophet forecasts
+pip install -e ".[api]"           # REST API (`api_server.py`)
 ```
 
 ### 3. Environment Configuration
@@ -73,6 +85,8 @@ The application will be available at: `http://localhost:5000`
 ## 🔧 Environment Variables
 
 All environment variables are optional. The application will work with basic functionality even without them.
+
+**Local file analysis (default):** you can click **Continue as guest** with no database. Set `DATAVIZ_REQUIRE_AUTH=1` to force login/register (requires a configured database).
 
 ### Database Configuration (Optional)
 
@@ -132,18 +146,38 @@ STREAMLIT_SERVER_ADDRESS=0.0.0.0
 3. Click the "Run" button
 4. Your app will be live at your Replit URL
 
-### Local Development
+### Local Development (Fast Mode - Recommended)
 
 ```bash
-# Development mode with auto-reload
-streamlit run app.py --server.port 5000 --server.runOnSave true
+# Fast startup with all optimizations
+python start_fast.py
+
+# Or manually with optimizations
+streamlit run app.py --server.port 8501 --server.fileWatcherType none
 ```
 
 ### Production Deployment
 
 ```bash
 # Production mode
-streamlit run app.py --server.port 5000 --server.headless true
+streamlit run app.py --server.port 8501 --server.headless true
+```
+
+## ⚡ Performance Optimizations
+
+The app has been optimized for fast loading:
+
+- ✅ **Removed CSS animations** - No more shimmer/float/pulse effects
+- ✅ **Removed JavaScript particles** - Canvas animation eliminated
+- ✅ **Lazy database loading** - DB connects only when needed
+- ✅ **Reduced CSS complexity** - Removed backdrop-filter blur effects
+- ✅ **Optimized Streamlit config** - Disabled file watching, reduced upload limits
+- ✅ **Minified menu items** - Removed hamburger menu options
+- ✅ **Collapsed sidebar by default** - Faster initial render
+
+**To run in maximum performance mode:**
+```bash
+python start_fast.py
 ```
 
 ## 📁 Project Structure
@@ -151,12 +185,15 @@ streamlit run app.py --server.port 5000 --server.headless true
 ```
 dataviz-pro/
 ├── app.py                 # Main application file
-├── pyproject.toml         # Python dependencies
+├── start_fast.py          # Fast startup script (optimized)
+├── pyproject.toml         # Core + optional dependency groups
+├── requirements.txt       # Lightweight install (file analysis)
+├── requirements-all.txt   # Full optional stack (DB, Prophet, API, …)
+├── .env                   # Environment variables
 ├── .replit               # Replit configuration
-├── .env.example          # Environment variables template
 ├── README.md             # This file
 └── .streamlit/
-    └── config.toml       # Streamlit configuration
+    └── config.toml       # Streamlit configuration (performance-optimized)
 ```
 
 ## 🎯 Usage Guide
@@ -164,7 +201,9 @@ dataviz-pro/
 ### 1. Data Import
 - **Upload Files**: Drag and drop CSV or Excel files
 - **Sample Data**: Choose from 4 pre-built datasets
-- **Database**: Load previously saved datasets
+- **Database**: Load previously saved datasets (optional, when configured)
+- **Overview**: Auto-detected column roles and suggested next steps for charts, maps, and time series
+- **Maps**: If you have city/region text but no coordinates, use **Geographic Maps → Geocode** (OpenStreetMap via `geopy`; respect rate limits)
 
 ### 2. Visualization
 - Select from 15+ chart types
@@ -216,8 +255,11 @@ streamlit run app.py --server.port 8502
 
 **Missing Dependencies:**
 ```bash
-# Reinstall all packages
+# Reinstall lightweight core
 pip install --force-reinstall -r requirements.txt
+
+# Or full stack
+pip install --force-reinstall -r requirements-all.txt
 ```
 
 **Database Connection Failed:**
